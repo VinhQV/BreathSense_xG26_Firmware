@@ -1,0 +1,24 @@
+#ifndef BREATHSENSE_MFCC_CONFIG_H
+#define BREATHSENSE_MFCC_CONFIG_H
+
+#define BS_AUDIO_SAMPLE_RATE_HZ       16000u
+#define BS_AUDIO_WINDOW_SAMPLES       25600u
+#define BS_AUDIO_PADDED_SAMPLES       26112u
+
+#define BS_MFCC_FFT_SIZE              1024u
+#define BS_MFCC_SPECTRUM_BINS         513u
+#define BS_MFCC_HOP_LENGTH            512u
+#define BS_MFCC_MEL_COUNT             64u
+#define BS_MFCC_COEFFICIENT_COUNT     40u
+#define BS_MFCC_FRAME_COUNT           50u
+#define BS_MFCC_ELEMENT_COUNT         2000u
+
+#define BS_MFCC_LOG_EPSILON           1.0e-6f
+
+#define BS_MFCC_GLOBAL_MEAN          (-1.829951524734497f)
+#define BS_MFCC_GLOBAL_STD            11.548264503479004f
+
+#define BS_MODEL_INPUT_SCALE          0.05189629644f
+#define BS_MODEL_INPUT_ZERO_POINT     53
+
+#endif

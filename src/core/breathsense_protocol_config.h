@@ -1,0 +1,9 @@
+#ifndef BREATHSENSE_PROTOCOL_CONFIG_H
+#define BREATHSENSE_PROTOCOL_CONFIG_H
+
+/*
+ * ID cua node BreathSense.
+ */
+#define BREATHSENSE_NODE_ID    0x01u
+
+#endif /* BREATHSENSE_PROTOCOL_CONFIG_H */

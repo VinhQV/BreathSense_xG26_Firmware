@@ -1,0 +1,14 @@
+# Add this block to the END of:
+#   BreathSense_xG26_Node_V2/cmake_gcc/CMakeLists.txt
+
+# BEGIN BREATHSENSE AI INTERFACE
+
+target_sources(slc PRIVATE
+  "${CMAKE_CURRENT_LIST_DIR}/../breathsense_ai_mock.c"
+)
+
+target_include_directories(slc PRIVATE
+  "${CMAKE_CURRENT_LIST_DIR}/.."
+)
+
+# END BREATHSENSE AI INTERFACE
