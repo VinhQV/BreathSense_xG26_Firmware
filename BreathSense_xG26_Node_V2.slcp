@@ -1,8 +1,6 @@
 # Silicon Labs Project Configuration Tools: slcp, v0, Component selection file.
-
 project_name: BreathSense_xG26_Node_V2
 label: BreathSense_xG26_Node_V2
-
 description: |
   BreathSense is an embedded acoustic monitoring node for EFR32MG26.
   It continuously captures microphone audio and runs a two-stage
@@ -11,32 +9,24 @@ description: |
   as dry, wet or unknown. The node also samples temperature and
   humidity from an Si7021-compatible sensor and publishes events
   and environmental data through Bluetooth LE GATT notifications.
-
 category: AI/ML Application
-
 filter:
 - name: Capability
   value:
   - Machine Learning
-
 - name: Device Type
   value:
   - SoC
-
 - name: MCU
   value:
   - 32-bit MCU
-
 - name: Project Difficulty
   value:
   - Advanced
-
 package: aiml_app
 quality: development
-
 readme:
 - path: readme.md
-
 source:
 - path: app.c
 - path: breathsense_ai_live.cc
@@ -56,7 +46,11 @@ source:
 - path: src/core/breathsense_event.c
 - path: src/core/breathsense_telemetry.c
 - path: src/indicator/breathsense_indicator.c
-
+tag:
+- hardware:device:flash:130
+- hardware:device:ram:128
+- hardware:component:microphone
+- hardware:component:led:1+
 include:
 - path: .
   file_list:
@@ -76,207 +70,156 @@ include:
   - path: breathsense_ble.h
   - path: breathsense_ble_advertising.h
   - path: breathsense_ble_tx.h
-
 - path: src/core
   file_list:
   - path: breathsense_event.h
   - path: breathsense_protocol_config.h
   - path: breathsense_telemetry.h
-
 - path: src/indicator
   file_list:
   - path: breathsense_indicator.h
-
 - path: config/breathsense
   file_list:
   - path: breathsense_rtos_config.h
-
-tag:
-- hardware:device:flash:130
-- hardware:device:ram:128
-- hardware:component:microphone
-- hardware:component:led:1+
-
 sdk:
   vendor: silabs
   id: simplicity_sdk
   version: 2025.12.3
-
-sdk_extension:
-- vendor: silabs
-  id: aiml
-  version: 2.2.2
-
 toolchain_settings:
 - value: -Wno-unused-parameter
   option: gcc_compiler_option
-
 - value: -Wno-missing-field-initializers
   option: gcc_compiler_option
-
 component:
 - package: aiml
   vendor: silabs
-  id: ml_audio_feature_generation
-
-- package: aiml
-  vendor: silabs
   id: tensorflow_debug_log_iostream
-
 - package: aiml
   vendor: silabs
   id: tensorflow_lite_micro
-
 - package: aiml
   vendor: silabs
   id: tensorflow_lite_micro_accelerated_kernels
-
 - package: aiml
   vendor: silabs
   id: tensorflow_lite_micro_optimized_kernels
-
 - package: simplicity_sdk
   vendor: silabs
   id: EFR32MG26B510F3200IM68
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_connection
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_connection_role_peripheral
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_gatt_server
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_legacy_advertiser
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_pawr_sync
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_sync_scanner
-
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_stack
-
 - package: simplicity_sdk
   vendor: silabs
   id: brd2608a
-
 - package: simplicity_sdk
   vendor: silabs
   id: clock_manager
-
+- package: simplicity_sdk
+  vendor: silabs
+  id: cmsis_dsp
 - package: simplicity_sdk
   vendor: silabs
   id: device_init
-
 - package: simplicity_sdk
   vendor: silabs
   id: gatt_configuration
-
 - package: simplicity_sdk
   instance:
   - sensor
   vendor: silabs
   id: i2cspm
-
 - package: simplicity_sdk
   vendor: silabs
   id: iostream_recommended_stream
-
 - package: simplicity_sdk
   vendor: silabs
   id: iostream_retarget_stdio
-
 - package: simplicity_sdk
   vendor: silabs
   id: memory_manager
-
+- package: simplicity_sdk
+  vendor: silabs
+  id: mic_i2s_driver
 - package: simplicity_sdk
   vendor: silabs
   id: micriumos_kernel
-
 - package: simplicity_sdk
   vendor: silabs
   id: power_manager
-
 - package: simplicity_sdk
   vendor: silabs
   id: printf
-
 - package: simplicity_sdk
   vendor: silabs
   id: si70xx_driver
-
 - package: simplicity_sdk
   instance:
   - led0
   vendor: silabs
   id: simple_led
-
 - package: simplicity_sdk
   instance:
   - rgb_led0
   vendor: silabs
   id: simple_rgb_pwm_led
-
 - package: simplicity_sdk
   vendor: silabs
   id: sl_main
-
 - package: simplicity_sdk
   vendor: silabs
   id: sleeptimer
-
 - package: simplicity_sdk
   vendor: silabs
   id: status
-
 define:
 - name: DEBUG_EFM
 - name: TF_LITE_STATIC_MEMORY
-
 configuration:
 - name: SL_BOARD_ENABLE_VCOM
   value: '1'
-
 - name: SL_BOARD_ENABLE_SENSOR_MICROPHONE
   value: '1'
-
 - condition:
   - iostream_usart
   name: SL_IOSTREAM_USART_VCOM_CONVERT_BY_DEFAULT_LF_TO_CRLF
   value: '1'
-
 - condition:
   - iostream_uart
   name: SL_IOSTREAM_UART_VCOM_CONVERT_BY_DEFAULT_LF_TO_CRLF
   value: '1'
-
-- name: SL_ML_AUDIO_FEATURE_GENERATION_AUDIO_BUFFER_SIZE
-  value: '4096'
-
 - name: SL_TFLITE_MICRO_ARENA_SIZE
   value: '100000'
-
 - name: SL_HEAP_SIZE
   value: '8192'
-
 - condition:
   - tensorflow_lite_micro_accelerated_kernels
   name: SL_MVP_OPTIMIZE_SPEED
   value: '1'
-
 ui_hints:
   highlight:
   - path: readme.md
     focus: true
+sdk_extension:
+- vendor: silabs
+  id: aiml
+  version: 2.2.2
+

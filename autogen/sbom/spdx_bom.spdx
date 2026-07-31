@@ -13,7 +13,7 @@ DocumentNamespace: https://silabs.com
 
 ## Creation Information
 Creator: Organization: Silicon Laboratories, Inc.
-Created: 2026-07-28T14:17:40Z
+Created: 2026-07-31T08:01:40Z
 ## Relationships
 Relationship: SPDXRef-DOCUMENT DESCRIBES SPDXRef-silabs.aiml-2.2.2
 Relationship: SPDXRef-DOCUMENT DESCRIBES SPDXRef-silabs.simplicity_sdk-2025.12.3
@@ -26,40 +26,12 @@ PrimaryPackagePurpose: LIBRARY
 PackageDownloadLocation: NOASSERTION
 PackageSupplier: Organization: Silicon Laboratories Inc.
 ## Relationships
-Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation
 Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-tensorflow_debug_log_iostream
 Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-tflite-micro
 Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-tensorflow_lite_micro_accelerated_kernels
-Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15
 Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-tensorflow_dependency_flatbuffers
 Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-tensorflow_dependency_gemmlowp
 Relationship: SPDXRef-silabs.aiml-2.2.2 CONTAINS SPDXRef-silabs.aiml-2.2.2-tensorflow_dependency_ruy
-
-## Package Information
-PackageName: Audio Feature Generator
-SPDXID: SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation
-PackageVersion: 2.2.2
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: Silicon Laboratories Inc.
-PackageLicenseConcluded: Zlib AND Apache-2.0
-## Relationships
-Relationship: SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation CONTAINED_BY SPDXRef-silabs.aiml-2.2.2
-Relationship: SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation ANCESTOR_OF SPDXRef-ml_audio_feature_generation-2.3.1
-
-## Package Information
-PackageName: Microfrontend
-SPDXID: SPDXRef-ml_audio_feature_generation-2.3.1
-PackageVersion: 2.3.1
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: The Tensorflow Authors
-PackageOriginator: Organization: NOASSERTION
-PackageHomePage: https://github.com/tensorflow/tensorflow/tree/master/tensorflow/lite/experimental/microfrontend
-ExternalRef: PACKAGE-MANAGER purl pkg:github/tensorflow/tensorflow@v2.3.1
-PackageComment: <text>Microfrontend library to process audio that lives within the tensorflow repo on GitHub, version 2.3.1</text>
-## Relationships
-Relationship: SPDXRef-ml_audio_feature_generation-2.3.1 DESCENDANT_OF SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation
 
 ## Package Information
 PackageName: Debug Logging using IO Stream
@@ -108,32 +80,6 @@ PackageSupplier: Organization: Silicon Laboratories Inc.
 PackageLicenseConcluded: MSLA
 ## Relationships
 Relationship: SPDXRef-silabs.aiml-2.2.2-tensorflow_lite_micro_accelerated_kernels CONTAINED_BY SPDXRef-silabs.aiml-2.2.2
-
-## Package Information
-PackageName: cmsis_dsp_rfft
-SPDXID: SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15
-PackageVersion: 2.2.2
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: Silicon Laboratories Inc.
-PackageLicenseConcluded: Apache-2.0 AND Zlib
-## Relationships
-Relationship: SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15 CONTAINED_BY SPDXRef-silabs.aiml-2.2.2
-Relationship: SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15 ANCESTOR_OF SPDXRef-ml_cmsis_dsp_rfft_q15-1.15.0
-
-## Package Information
-PackageName: CMSIS-DSP
-SPDXID: SPDXRef-ml_cmsis_dsp_rfft_q15-1.15.0
-PackageVersion: 1.15.0
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: ARM-software
-PackageOriginator: Organization: NOASSERTION
-PackageHomePage: https://github.com/ARM-software/CMSIS-DSP
-ExternalRef: PACKAGE-MANAGER purl pkg:github/ARM-software/CMSIS-DSP@v1.15.0
-PackageComment: <text>CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0</text>
-## Relationships
-Relationship: SPDXRef-ml_cmsis_dsp_rfft_q15-1.15.0 DESCENDANT_OF SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15
 
 ## Package Information
 PackageName: Flatbuffers
@@ -246,7 +192,6 @@ Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.si
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-sleeptimer
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-status
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-bgapi_protocol_rtos_adaptation
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-micriumos_common_platform_manager
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-dmadrv_core
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-device_manager
@@ -307,7 +252,6 @@ Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.si
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-bluetooth_host_release_libraries
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-errno_error_codes
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_syscfg
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-trustzone_unaware
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-psa_se_driver
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-hfxo_manager
@@ -378,7 +322,6 @@ Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.si
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-agents_md
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_i2c
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-rail_lib_singleprotocol_alpha_chips
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-math_mvp
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-device_clock_hal
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-bluetooth_version
@@ -392,7 +335,6 @@ Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.si
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-device_clock
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-component_catalog
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_emu
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_driver
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-clock_manager_runtime_hal_s2
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_burtc
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-driver_mvp_hal_efr32
@@ -416,6 +358,9 @@ Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.si
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-sl_main_init
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-sl_main_process_action
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-gpio
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3 CONTAINS SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart
 
 ## Package Information
 PackageName: EFR32MG26B510F3200IM68
@@ -691,17 +636,6 @@ PackageSupplier: Organization: Silicon Laboratories, Inc.
 PackageLicenseConcluded: Zlib AND MSLA
 ## Relationships
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-bgapi_protocol_rtos_adaptation CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
-
-## Package Information
-PackageName: I2S Microphone
-SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver
-PackageVersion: 2025.12.3
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: Silicon Laboratories, Inc.
-PackageLicenseConcluded: Zlib
-## Relationships
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
 
 ## Package Information
 PackageName: Micrium OS Common Platform Manager
@@ -1392,17 +1326,6 @@ PackageSupplier: Organization: Silicon Laboratories, Inc.
 PackageLicenseConcluded: Zlib
 ## Relationships
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_syscfg CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
-
-## Package Information
-PackageName: USART
-SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart
-PackageVersion: 2025.12.3
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: Silicon Laboratories, Inc.
-PackageLicenseConcluded: Zlib
-## Relationships
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
 
 ## Package Information
 PackageName: TrustZone Unaware
@@ -2175,32 +2098,6 @@ PackageLicenseConcluded: MSLA
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-rail_lib_singleprotocol_alpha_chips CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
 
 ## Package Information
-PackageName: CMSIS-DSP
-SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp
-PackageVersion: 2025.12.3
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: Silicon Laboratories, Inc.
-PackageLicenseConcluded: Apache-2.0
-## Relationships
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp ANCESTOR_OF SPDXRef-cmsis_dsp-1.15.0
-
-## Package Information
-PackageName: CMSIS-DSP
-SPDXID: SPDXRef-cmsis_dsp-1.15.0
-PackageVersion: 1.15.0
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: ARM-software
-PackageOriginator: Organization: NOASSERTION
-PackageHomePage: https://github.com/ARM-software/CMSIS-DSP
-ExternalRef: PACKAGE-MANAGER purl pkg:github/ARM-software/CMSIS-DSP@v1.15.0
-PackageComment: <text>CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0</text>
-## Relationships
-Relationship: SPDXRef-cmsis_dsp-1.15.0 DESCENDANT_OF SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp
-
-## Package Information
 PackageName: MVP Math
 SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-math_mvp
 PackageVersion: 2025.12.3
@@ -2372,17 +2269,6 @@ PackageSupplier: Organization: Silicon Laboratories, Inc.
 PackageLicenseConcluded: Zlib
 ## Relationships
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_emu CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
-
-## Package Information
-PackageName: Microphone
-SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_driver
-PackageVersion: 2025.12.3
-PrimaryPackagePurpose: LIBRARY
-PackageDownloadLocation: NOASSERTION
-PackageSupplier: Organization: Silicon Laboratories, Inc.
-PackageLicenseConcluded: Zlib
-## Relationships
-Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_driver CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
 
 ## Package Information
 PackageName: Clock Manager Runtime HAL Series 2
@@ -2651,3 +2537,51 @@ PackageSupplier: Organization: Silicon Laboratories, Inc.
 PackageLicenseConcluded: Zlib
 ## Relationships
 Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-gpio CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
+
+## Package Information
+PackageName: CMSIS-DSP
+SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp
+PackageVersion: 2025.12.3
+PrimaryPackagePurpose: LIBRARY
+PackageDownloadLocation: NOASSERTION
+PackageSupplier: Organization: Silicon Laboratories, Inc.
+PackageLicenseConcluded: Apache-2.0
+## Relationships
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp ANCESTOR_OF SPDXRef-cmsis_dsp-1.15.0
+
+## Package Information
+PackageName: CMSIS-DSP
+SPDXID: SPDXRef-cmsis_dsp-1.15.0
+PackageVersion: 1.15.0
+PrimaryPackagePurpose: LIBRARY
+PackageDownloadLocation: NOASSERTION
+PackageSupplier: Organization: ARM-software
+PackageOriginator: Organization: NOASSERTION
+PackageHomePage: https://github.com/ARM-software/CMSIS-DSP
+ExternalRef: PACKAGE-MANAGER purl pkg:github/ARM-software/CMSIS-DSP@v1.15.0
+PackageComment: <text>CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0</text>
+## Relationships
+Relationship: SPDXRef-cmsis_dsp-1.15.0 DESCENDANT_OF SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp
+
+## Package Information
+PackageName: I2S Microphone
+SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver
+PackageVersion: 2025.12.3
+PrimaryPackagePurpose: LIBRARY
+PackageDownloadLocation: NOASSERTION
+PackageSupplier: Organization: Silicon Laboratories, Inc.
+PackageLicenseConcluded: Zlib
+## Relationships
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
+
+## Package Information
+PackageName: USART
+SPDXID: SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart
+PackageVersion: 2025.12.3
+PrimaryPackagePurpose: LIBRARY
+PackageDownloadLocation: NOASSERTION
+PackageSupplier: Organization: Silicon Laboratories, Inc.
+PackageLicenseConcluded: Zlib
+## Relationships
+Relationship: SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart CONTAINED_BY SPDXRef-silabs.simplicity_sdk-2025.12.3
