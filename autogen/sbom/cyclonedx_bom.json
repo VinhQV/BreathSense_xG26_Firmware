@@ -3,7 +3,7 @@
   "specVersion" : "1.6",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-07-28T14:17:40Z",
+    "timestamp" : "2026-07-31T08:01:40Z",
     "authors" : [ {
       "name" : "Silicon Laboratories, Inc."
     } ],
@@ -22,38 +22,6 @@
       "name" : "Silicon Laboratories Inc."
     },
     "components" : [ {
-      "scope" : "required",
-      "type" : "library",
-      "bom-ref" : "silabs.aiml:2.2.2:ml_audio_feature_generation",
-      "name" : "Audio Feature Generator",
-      "version" : "2.2.2",
-      "supplier" : {
-        "name" : "Silicon Laboratories Inc."
-      },
-      "licenses" : [ {
-        "expression" : "Zlib AND Apache-2.0"
-      } ],
-      "pedigree" : {
-        "ancestors" : [ {
-          "scope" : "required",
-          "type" : "library",
-          "bom-ref" : "ml_audio_feature_generation:2.3.1",
-          "name" : "Microfrontend",
-          "version" : "2.3.1",
-          "supplier" : {
-            "name" : "The Tensorflow Authors"
-          },
-          "externalReferences" : [ {
-            "type" : "website",
-            "url" : "https://github.com/tensorflow/tensorflow/tree/master/tensorflow/lite/experimental/microfrontend"
-          } ],
-          "purl" : "pkg:github/tensorflow/tensorflow@v2.3.1",
-          "pedigree" : {
-            "notes" : "Microfrontend library to process audio that lives within the tensorflow repo on GitHub, version 2.3.1"
-          }
-        } ]
-      }
-    }, {
       "scope" : "required",
       "type" : "library",
       "bom-ref" : "silabs.aiml:2.2.2:tensorflow_debug_log_iostream",
@@ -109,38 +77,6 @@
       "licenses" : [ {
         "expression" : "MSLA"
       } ]
-    }, {
-      "scope" : "required",
-      "type" : "library",
-      "bom-ref" : "silabs.aiml:2.2.2:ml_cmsis_dsp_rfft_q15",
-      "name" : "cmsis_dsp_rfft",
-      "version" : "2.2.2",
-      "supplier" : {
-        "name" : "Silicon Laboratories Inc."
-      },
-      "licenses" : [ {
-        "expression" : "Apache-2.0 AND Zlib"
-      } ],
-      "pedigree" : {
-        "ancestors" : [ {
-          "scope" : "required",
-          "type" : "library",
-          "bom-ref" : "ml_cmsis_dsp_rfft_q15:1.15.0",
-          "name" : "CMSIS-DSP",
-          "version" : "1.15.0",
-          "supplier" : {
-            "name" : "ARM-software"
-          },
-          "externalReferences" : [ {
-            "type" : "website",
-            "url" : "https://github.com/ARM-software/CMSIS-DSP"
-          } ],
-          "purl" : "pkg:github/ARM-software/CMSIS-DSP@v1.15.0",
-          "pedigree" : {
-            "notes" : "CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0"
-          }
-        } ]
-      }
     }, {
       "scope" : "required",
       "type" : "library",
@@ -546,18 +482,6 @@
       },
       "licenses" : [ {
         "expression" : "Zlib AND MSLA"
-      } ]
-    }, {
-      "scope" : "required",
-      "type" : "library",
-      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:mic_i2s_driver",
-      "name" : "I2S Microphone",
-      "version" : "2025.12.3",
-      "supplier" : {
-        "name" : "Silicon Laboratories, Inc."
-      },
-      "licenses" : [ {
-        "expression" : "Zlib"
       } ]
     }, {
       "scope" : "required",
@@ -1312,18 +1236,6 @@
       "type" : "library",
       "bom-ref" : "silabs.simplicity_sdk:2025.12.3:emlib_syscfg",
       "name" : "SYSCFG",
-      "version" : "2025.12.3",
-      "supplier" : {
-        "name" : "Silicon Laboratories, Inc."
-      },
-      "licenses" : [ {
-        "expression" : "Zlib"
-      } ]
-    }, {
-      "scope" : "required",
-      "type" : "library",
-      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:hal_usart",
-      "name" : "USART",
       "version" : "2025.12.3",
       "supplier" : {
         "name" : "Silicon Laboratories, Inc."
@@ -2174,38 +2086,6 @@
     }, {
       "scope" : "required",
       "type" : "library",
-      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:cmsis_dsp",
-      "name" : "CMSIS-DSP",
-      "version" : "2025.12.3",
-      "supplier" : {
-        "name" : "Silicon Laboratories, Inc."
-      },
-      "licenses" : [ {
-        "expression" : "Apache-2.0"
-      } ],
-      "pedigree" : {
-        "ancestors" : [ {
-          "scope" : "required",
-          "type" : "library",
-          "bom-ref" : "cmsis_dsp:1.15.0",
-          "name" : "CMSIS-DSP",
-          "version" : "1.15.0",
-          "supplier" : {
-            "name" : "ARM-software"
-          },
-          "externalReferences" : [ {
-            "type" : "website",
-            "url" : "https://github.com/ARM-software/CMSIS-DSP"
-          } ],
-          "purl" : "pkg:github/ARM-software/CMSIS-DSP@v1.15.0",
-          "pedigree" : {
-            "notes" : "CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0"
-          }
-        } ]
-      }
-    }, {
-      "scope" : "required",
-      "type" : "library",
       "bom-ref" : "silabs.simplicity_sdk:2025.12.3:math_mvp",
       "name" : "MVP Math",
       "version" : "2025.12.3",
@@ -2392,18 +2272,6 @@
       "type" : "library",
       "bom-ref" : "silabs.simplicity_sdk:2025.12.3:emlib_emu",
       "name" : "EMU",
-      "version" : "2025.12.3",
-      "supplier" : {
-        "name" : "Silicon Laboratories, Inc."
-      },
-      "licenses" : [ {
-        "expression" : "Zlib"
-      } ]
-    }, {
-      "scope" : "required",
-      "type" : "library",
-      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:mic_driver",
-      "name" : "Microphone",
       "version" : "2025.12.3",
       "supplier" : {
         "name" : "Silicon Laboratories, Inc."
@@ -2700,6 +2568,62 @@
       "type" : "library",
       "bom-ref" : "silabs.simplicity_sdk:2025.12.3:gpio",
       "name" : "GPIO Driver",
+      "version" : "2025.12.3",
+      "supplier" : {
+        "name" : "Silicon Laboratories, Inc."
+      },
+      "licenses" : [ {
+        "expression" : "Zlib"
+      } ]
+    }, {
+      "scope" : "required",
+      "type" : "library",
+      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:cmsis_dsp",
+      "name" : "CMSIS-DSP",
+      "version" : "2025.12.3",
+      "supplier" : {
+        "name" : "Silicon Laboratories, Inc."
+      },
+      "licenses" : [ {
+        "expression" : "Apache-2.0"
+      } ],
+      "pedigree" : {
+        "ancestors" : [ {
+          "scope" : "required",
+          "type" : "library",
+          "bom-ref" : "cmsis_dsp:1.15.0",
+          "name" : "CMSIS-DSP",
+          "version" : "1.15.0",
+          "supplier" : {
+            "name" : "ARM-software"
+          },
+          "externalReferences" : [ {
+            "type" : "website",
+            "url" : "https://github.com/ARM-software/CMSIS-DSP"
+          } ],
+          "purl" : "pkg:github/ARM-software/CMSIS-DSP@v1.15.0",
+          "pedigree" : {
+            "notes" : "CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0"
+          }
+        } ]
+      }
+    }, {
+      "scope" : "required",
+      "type" : "library",
+      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:mic_i2s_driver",
+      "name" : "I2S Microphone",
+      "version" : "2025.12.3",
+      "supplier" : {
+        "name" : "Silicon Laboratories, Inc."
+      },
+      "licenses" : [ {
+        "expression" : "Zlib"
+      } ]
+    }, {
+      "scope" : "required",
+      "type" : "library",
+      "bom-ref" : "silabs.simplicity_sdk:2025.12.3:hal_usart",
+      "name" : "USART",
       "version" : "2025.12.3",
       "supplier" : {
         "name" : "Silicon Laboratories, Inc."

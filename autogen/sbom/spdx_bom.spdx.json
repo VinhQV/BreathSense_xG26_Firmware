@@ -5,7 +5,7 @@
   "name" : "Silicon-Laboratories",
   "documentNamespace" : "https://silabs.com",
   "creationInfo" : {
-    "created" : "2026-07-28T14:17:40Z",
+    "created" : "2026-07-31T08:01:40Z",
     "creators" : [ "Tool: Silicon Labs Configuration Tooling" ]
   },
   "comment" : "TERMS OF USE - SILICON LABORATORIES INC.\n(With respect to Silicon Labs software components, this Software Bill of Materials (SBOM) is based upon Silicon Labs'\nreview and analysis of the code version when released.  It is provided \"AS IS\" and does not modify, change or alter\nthe terms or conditions of your use of Silicon Labs' software and/or SDKs based upon license terms and/or agreements\nassociated with this software or SDKs when distributed to you, received by you, or installed by you.  Further, no\nwarranties or obligations are created by this SBOM.  It is your obligation to comply with the terms of licenses\nreferenced in this SBOM.)",
@@ -17,29 +17,6 @@
     "primaryPackagePurpose" : "LIBRARY",
     "downloadLocation" : "NOASSERTION",
     "supplier" : "Organization: Silicon Laboratories Inc."
-  }, {
-    "SPDXID" : "SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation",
-    "name" : "Audio Feature Generator",
-    "versionInfo" : "2.2.2",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: Silicon Laboratories Inc.",
-    "licenseConcluded" : "Zlib AND Apache-2.0"
-  }, {
-    "SPDXID" : "SPDXRef-ml_audio_feature_generation-2.3.1",
-    "name" : "Microfrontend",
-    "versionInfo" : "2.3.1",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: The Tensorflow Authors",
-    "originator" : "Organization: NOASSERTION",
-    "homepage" : "https://github.com/tensorflow/tensorflow/tree/master/tensorflow/lite/experimental/microfrontend",
-    "externalRefs" : [ {
-      "referenceCategory" : "PACKAGE-MANAGER",
-      "referenceLocator" : "pkg:github/tensorflow/tensorflow@v2.3.1",
-      "referenceType" : "purl"
-    } ],
-    "comment" : "Microfrontend library to process audio that lives within the tensorflow repo on GitHub, version 2.3.1"
   }, {
     "SPDXID" : "SPDXRef-silabs.aiml-2.2.2-tensorflow_debug_log_iostream",
     "name" : "Debug Logging using IO Stream",
@@ -79,29 +56,6 @@
     "downloadLocation" : "NOASSERTION",
     "supplier" : "Organization: Silicon Laboratories Inc.",
     "licenseConcluded" : "MSLA"
-  }, {
-    "SPDXID" : "SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15",
-    "name" : "cmsis_dsp_rfft",
-    "versionInfo" : "2.2.2",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: Silicon Laboratories Inc.",
-    "licenseConcluded" : "Apache-2.0 AND Zlib"
-  }, {
-    "SPDXID" : "SPDXRef-ml_cmsis_dsp_rfft_q15-1.15.0",
-    "name" : "CMSIS-DSP",
-    "versionInfo" : "1.15.0",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: ARM-software",
-    "originator" : "Organization: NOASSERTION",
-    "homepage" : "https://github.com/ARM-software/CMSIS-DSP",
-    "externalRefs" : [ {
-      "referenceCategory" : "PACKAGE-MANAGER",
-      "referenceLocator" : "pkg:github/ARM-software/CMSIS-DSP@v1.15.0",
-      "referenceType" : "purl"
-    } ],
-    "comment" : "CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0"
   }, {
     "SPDXID" : "SPDXRef-silabs.aiml-2.2.2-tensorflow_dependency_flatbuffers",
     "name" : "Flatbuffers",
@@ -378,14 +332,6 @@
     "downloadLocation" : "NOASSERTION",
     "supplier" : "Organization: Silicon Laboratories, Inc.",
     "licenseConcluded" : "Zlib AND MSLA"
-  }, {
-    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver",
-    "name" : "I2S Microphone",
-    "versionInfo" : "2025.12.3",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: Silicon Laboratories, Inc.",
-    "licenseConcluded" : "Zlib"
   }, {
     "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-micriumos_common_platform_manager",
     "name" : "Micrium OS Common Platform Manager",
@@ -891,14 +837,6 @@
   }, {
     "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_syscfg",
     "name" : "SYSCFG",
-    "versionInfo" : "2025.12.3",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: Silicon Laboratories, Inc.",
-    "licenseConcluded" : "Zlib"
-  }, {
-    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart",
-    "name" : "USART",
     "versionInfo" : "2025.12.3",
     "primaryPackagePurpose" : "LIBRARY",
     "downloadLocation" : "NOASSERTION",
@@ -1465,29 +1403,6 @@
     "supplier" : "Organization: Silicon Laboratories, Inc.",
     "licenseConcluded" : "MSLA"
   }, {
-    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp",
-    "name" : "CMSIS-DSP",
-    "versionInfo" : "2025.12.3",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: Silicon Laboratories, Inc.",
-    "licenseConcluded" : "Apache-2.0"
-  }, {
-    "SPDXID" : "SPDXRef-cmsis_dsp-1.15.0",
-    "name" : "CMSIS-DSP",
-    "versionInfo" : "1.15.0",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: ARM-software",
-    "originator" : "Organization: NOASSERTION",
-    "homepage" : "https://github.com/ARM-software/CMSIS-DSP",
-    "externalRefs" : [ {
-      "referenceCategory" : "PACKAGE-MANAGER",
-      "referenceLocator" : "pkg:github/ARM-software/CMSIS-DSP@v1.15.0",
-      "referenceType" : "purl"
-    } ],
-    "comment" : "CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0"
-  }, {
     "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-math_mvp",
     "name" : "MVP Math",
     "versionInfo" : "2025.12.3",
@@ -1616,14 +1531,6 @@
   }, {
     "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_emu",
     "name" : "EMU",
-    "versionInfo" : "2025.12.3",
-    "primaryPackagePurpose" : "LIBRARY",
-    "downloadLocation" : "NOASSERTION",
-    "supplier" : "Organization: Silicon Laboratories, Inc.",
-    "licenseConcluded" : "Zlib"
-  }, {
-    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_driver",
-    "name" : "Microphone",
     "versionInfo" : "2025.12.3",
     "primaryPackagePurpose" : "LIBRARY",
     "downloadLocation" : "NOASSERTION",
@@ -1828,6 +1735,45 @@
     "downloadLocation" : "NOASSERTION",
     "supplier" : "Organization: Silicon Laboratories, Inc.",
     "licenseConcluded" : "Zlib"
+  }, {
+    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp",
+    "name" : "CMSIS-DSP",
+    "versionInfo" : "2025.12.3",
+    "primaryPackagePurpose" : "LIBRARY",
+    "downloadLocation" : "NOASSERTION",
+    "supplier" : "Organization: Silicon Laboratories, Inc.",
+    "licenseConcluded" : "Apache-2.0"
+  }, {
+    "SPDXID" : "SPDXRef-cmsis_dsp-1.15.0",
+    "name" : "CMSIS-DSP",
+    "versionInfo" : "1.15.0",
+    "primaryPackagePurpose" : "LIBRARY",
+    "downloadLocation" : "NOASSERTION",
+    "supplier" : "Organization: ARM-software",
+    "originator" : "Organization: NOASSERTION",
+    "homepage" : "https://github.com/ARM-software/CMSIS-DSP",
+    "externalRefs" : [ {
+      "referenceCategory" : "PACKAGE-MANAGER",
+      "referenceLocator" : "pkg:github/ARM-software/CMSIS-DSP@v1.15.0",
+      "referenceType" : "purl"
+    } ],
+    "comment" : "CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0"
+  }, {
+    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver",
+    "name" : "I2S Microphone",
+    "versionInfo" : "2025.12.3",
+    "primaryPackagePurpose" : "LIBRARY",
+    "downloadLocation" : "NOASSERTION",
+    "supplier" : "Organization: Silicon Laboratories, Inc.",
+    "licenseConcluded" : "Zlib"
+  }, {
+    "SPDXID" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart",
+    "name" : "USART",
+    "versionInfo" : "2025.12.3",
+    "primaryPackagePurpose" : "LIBRARY",
+    "downloadLocation" : "NOASSERTION",
+    "supplier" : "Organization: Silicon Laboratories, Inc.",
+    "licenseConcluded" : "Zlib"
   } ],
   "relationships" : [ {
     "spdxElementId" : "SPDXRef-DOCUMENT",
@@ -1837,14 +1783,6 @@
     "spdxElementId" : "SPDXRef-DOCUMENT",
     "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
     "relationshipType" : "DESCRIBES"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2",
-    "relatedSpdxElement" : "SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation",
-    "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2-ml_audio_feature_generation",
-    "relatedSpdxElement" : "SPDXRef-ml_audio_feature_generation-2.3.1",
-    "relationshipType" : "ANCESTOR_OF"
   }, {
     "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2",
     "relatedSpdxElement" : "SPDXRef-silabs.aiml-2.2.2-tensorflow_debug_log_iostream",
@@ -1861,14 +1799,6 @@
     "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2",
     "relatedSpdxElement" : "SPDXRef-silabs.aiml-2.2.2-tensorflow_lite_micro_accelerated_kernels",
     "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2",
-    "relatedSpdxElement" : "SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15",
-    "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2-ml_cmsis_dsp_rfft_q15",
-    "relatedSpdxElement" : "SPDXRef-ml_cmsis_dsp_rfft_q15-1.15.0",
-    "relationshipType" : "ANCESTOR_OF"
   }, {
     "spdxElementId" : "SPDXRef-silabs.aiml-2.2.2",
     "relatedSpdxElement" : "SPDXRef-silabs.aiml-2.2.2-tensorflow_dependency_flatbuffers",
@@ -1992,10 +1922,6 @@
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
     "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-bgapi_protocol_rtos_adaptation",
-    "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
-    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver",
     "relationshipType" : "CONTAINS"
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
@@ -2244,10 +2170,6 @@
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
     "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_syscfg",
-    "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
-    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart",
     "relationshipType" : "CONTAINS"
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
@@ -2531,14 +2453,6 @@
     "relationshipType" : "CONTAINS"
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
-    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp",
-    "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp",
-    "relatedSpdxElement" : "SPDXRef-cmsis_dsp-1.15.0",
-    "relationshipType" : "ANCESTOR_OF"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
     "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-math_mvp",
     "relationshipType" : "CONTAINS"
   }, {
@@ -2596,10 +2510,6 @@
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
     "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-emlib_emu",
-    "relationshipType" : "CONTAINS"
-  }, {
-    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
-    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_driver",
     "relationshipType" : "CONTAINS"
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
@@ -2696,6 +2606,22 @@
   }, {
     "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
     "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-gpio",
+    "relationshipType" : "CONTAINS"
+  }, {
+    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
+    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp",
+    "relationshipType" : "CONTAINS"
+  }, {
+    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-cmsis_dsp",
+    "relatedSpdxElement" : "SPDXRef-cmsis_dsp-1.15.0",
+    "relationshipType" : "ANCESTOR_OF"
+  }, {
+    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
+    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-mic_i2s_driver",
+    "relationshipType" : "CONTAINS"
+  }, {
+    "spdxElementId" : "SPDXRef-silabs.simplicity_sdk-2025.12.3",
+    "relatedSpdxElement" : "SPDXRef-silabs.simplicity_sdk-2025.12.3-hal_usart",
     "relationshipType" : "CONTAINS"
   } ]
 }

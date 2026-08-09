@@ -2,7 +2,13 @@
 project_name: BreathSense_xG26_Node_V2
 label: BreathSense_xG26_Node_V2
 description: |
-  This application uses TensorFlow Lite for Microcontrollers to detect the spoken words "on" and "off" from audio data recorded on the microphone in a Micrium OS kernel task. The detected keywords are used to control an LED on the board.
+  BreathSense is an embedded acoustic monitoring node for EFR32MG26.
+  It continuously captures microphone audio and runs a two-stage
+  TensorFlow Lite Micro pipeline. Stage 1 detects cough, speech,
+  sneeze and other audio. Stage 2 classifies detected cough events
+  as dry, wet or unknown. The node also samples temperature and
+  humidity from an Si7021-compatible sensor and publishes events
+  and environmental data through Bluetooth LE GATT notifications.
 category: AI/ML Application
 filter:
 - name: Capability
@@ -18,13 +24,28 @@ filter:
   value:
   - Advanced
 package: aiml_app
-quality: production
+quality: development
 readme:
 - path: readme.md
 source:
 - path: app.c
-- path: voice_control_light.cc
-- path: recognize_commands.cc
+- path: breathsense_ai_live.cc
+- path: breathsense_inference_runtime.cc
+- path: breathsense_mfcc_coefficients.cc
+- path: breathsense_mfcc_runtime.cc
+- path: breathsense_model_data.cc
+- path: breathsense_stage2_logmel_coefficients.cc
+- path: breathsense_stage2_logmel_runtime.cc
+- path: breathsense_stage2_model_data.cc
+- path: breathsense_stage2_runtime.cc
+- path: breathsense_tflite_autoinit_stub.cc
+- path: breathsense_sensor.c
+- path: breathsense_ble.c
+- path: breathsense_ble_advertising.c
+- path: breathsense_ble_tx.c
+- path: src/core/breathsense_event.c
+- path: src/core/breathsense_telemetry.c
+- path: src/indicator/breathsense_indicator.c
 tag:
 - hardware:device:flash:130
 - hardware:device:ram:128
@@ -34,8 +55,32 @@ include:
 - path: .
   file_list:
   - path: app.h
-  - path: voice_control_light.h
-  - path: recognize_commands.h
+  - path: breathsense_ai.h
+  - path: breathsense_ai_product_config.h
+  - path: breathsense_inference_runtime.h
+  - path: breathsense_mfcc_coefficients.h
+  - path: breathsense_mfcc_config.h
+  - path: breathsense_mfcc_runtime.h
+  - path: breathsense_model_data.h
+  - path: breathsense_stage2_logmel_coefficients.h
+  - path: breathsense_stage2_logmel_runtime.h
+  - path: breathsense_stage2_model_data.h
+  - path: breathsense_stage2_runtime.h
+  - path: breathsense_sensor.h
+  - path: breathsense_ble.h
+  - path: breathsense_ble_advertising.h
+  - path: breathsense_ble_tx.h
+- path: src/core
+  file_list:
+  - path: breathsense_event.h
+  - path: breathsense_protocol_config.h
+  - path: breathsense_telemetry.h
+- path: src/indicator
+  file_list:
+  - path: breathsense_indicator.h
+- path: config/breathsense
+  file_list:
+  - path: breathsense_rtos_config.h
 sdk:
   vendor: silabs
   id: simplicity_sdk
@@ -46,9 +91,6 @@ toolchain_settings:
 - value: -Wno-missing-field-initializers
   option: gcc_compiler_option
 component:
-- package: aiml
-  vendor: silabs
-  id: ml_audio_feature_generation
 - package: aiml
   vendor: silabs
   id: tensorflow_debug_log_iostream
@@ -93,6 +135,9 @@ component:
   id: clock_manager
 - package: simplicity_sdk
   vendor: silabs
+  id: cmsis_dsp
+- package: simplicity_sdk
+  vendor: silabs
   id: device_init
 - package: simplicity_sdk
   vendor: silabs
@@ -111,6 +156,9 @@ component:
 - package: simplicity_sdk
   vendor: silabs
   id: memory_manager
+- package: simplicity_sdk
+  vendor: silabs
+  id: mic_i2s_driver
 - package: simplicity_sdk
   vendor: silabs
   id: micriumos_kernel
@@ -145,10 +193,6 @@ component:
 define:
 - name: DEBUG_EFM
 - name: TF_LITE_STATIC_MEMORY
-config_file:
-- path: config/recognize_commands_config.h
-- path: config/tflite/keyword_spotting_on_off_v2.tflite
-  directory: tflite
 configuration:
 - name: SL_BOARD_ENABLE_VCOM
   value: '1'
@@ -162,8 +206,6 @@ configuration:
   - iostream_uart
   name: SL_IOSTREAM_UART_VCOM_CONVERT_BY_DEFAULT_LF_TO_CRLF
   value: '1'
-- name: SL_ML_AUDIO_FEATURE_GENERATION_AUDIO_BUFFER_SIZE
-  value: '4096'
 - name: SL_TFLITE_MICRO_ARENA_SIZE
   value: '100000'
 - name: SL_HEAP_SIZE

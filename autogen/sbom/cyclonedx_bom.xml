@@ -10,7 +10,7 @@ referenced in this SBOM.)
 -->
 <bom xmlns="http://cyclonedx.org/schema/bom/1.6" version="1">
   <metadata>
-    <timestamp>2026-07-28T14:17:40Z</timestamp>
+    <timestamp>2026-07-31T08:01:40Z</timestamp>
     <authors>
       <author>
         <name>Silicon Laboratories, Inc.</name>
@@ -25,36 +25,6 @@ referenced in this SBOM.)
       <name>Silicon Labs AI/ML</name>
       <version>2.2.2</version>
       <components>
-        <component bom-ref="silabs.aiml:2.2.2:ml_audio_feature_generation" type="library">
-          <name>Audio Feature Generator</name>
-          <version>2.2.2</version>
-	      <supplier>
-	        <name>Silicon Laboratories Inc.</name>
-	      </supplier>
-          <licenses>
-            <expression>Zlib AND Apache-2.0</expression>
-          </licenses>
-          <pedigree>
-            <ancestors>
-              <component bom-ref="ml_audio_feature_generation:2.3.1" type="library">
-                <supplier>
-                  <name>The Tensorflow Authors</name>
-                </supplier>
-                <name>Microfrontend</name>
-                <version>2.3.1</version>
-                <purl>pkg:github/tensorflow/tensorflow@v2.3.1</purl>
-                <pedigree>
-                  <notes>Microfrontend library to process audio that lives within the tensorflow repo on GitHub, version 2.3.1</notes>
-                </pedigree>
-                <externalReferences>
-                  <reference type="website">
-                    <url>https://github.com/tensorflow/tensorflow/tree/master/tensorflow/lite/experimental/microfrontend</url>
-                  </reference>
-                </externalReferences>
-              </component>
-            </ancestors>
-          </pedigree>
-        </component>
         <component bom-ref="silabs.aiml:2.2.2:tensorflow_debug_log_iostream" type="library">
           <name>Debug Logging using IO Stream</name>
           <version>2.2.2</version>
@@ -104,36 +74,6 @@ referenced in this SBOM.)
           <licenses>
             <expression>MSLA</expression>
           </licenses>
-        </component>
-        <component bom-ref="silabs.aiml:2.2.2:ml_cmsis_dsp_rfft_q15" type="library">
-          <name>cmsis_dsp_rfft</name>
-          <version>2.2.2</version>
-	      <supplier>
-	        <name>Silicon Laboratories Inc.</name>
-	      </supplier>
-          <licenses>
-            <expression>Apache-2.0 AND Zlib</expression>
-          </licenses>
-          <pedigree>
-            <ancestors>
-              <component bom-ref="ml_cmsis_dsp_rfft_q15:1.15.0" type="library">
-                <supplier>
-                  <name>ARM-software</name>
-                </supplier>
-                <name>CMSIS-DSP</name>
-                <version>1.15.0</version>
-                <purl>pkg:github/ARM-software/CMSIS-DSP@v1.15.0</purl>
-                <pedigree>
-                  <notes>CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0</notes>
-                </pedigree>
-                <externalReferences>
-                  <reference type="website">
-                    <url>https://github.com/ARM-software/CMSIS-DSP</url>
-                  </reference>
-                </externalReferences>
-              </component>
-            </ancestors>
-          </pedigree>
         </component>
         <component bom-ref="silabs.aiml:2.2.2:tensorflow_dependency_flatbuffers" type="library">
           <name>Flatbuffers</name>
@@ -482,16 +422,6 @@ referenced in this SBOM.)
 	      </supplier>
           <licenses>
             <expression>Zlib AND MSLA</expression>
-          </licenses>
-        </component>
-        <component bom-ref="silabs.simplicity_sdk:2025.12.3:mic_i2s_driver" type="library">
-          <name>I2S Microphone</name>
-          <version>2025.12.3</version>
-	      <supplier>
-	        <name>Silicon Laboratories, Inc.</name>
-	      </supplier>
-          <licenses>
-            <expression>Zlib</expression>
           </licenses>
         </component>
         <component bom-ref="silabs.simplicity_sdk:2025.12.3:micriumos_common_platform_manager" type="library">
@@ -1126,16 +1056,6 @@ referenced in this SBOM.)
         </component>
         <component bom-ref="silabs.simplicity_sdk:2025.12.3:emlib_syscfg" type="library">
           <name>SYSCFG</name>
-          <version>2025.12.3</version>
-	      <supplier>
-	        <name>Silicon Laboratories, Inc.</name>
-	      </supplier>
-          <licenses>
-            <expression>Zlib</expression>
-          </licenses>
-        </component>
-        <component bom-ref="silabs.simplicity_sdk:2025.12.3:hal_usart" type="library">
-          <name>USART</name>
           <version>2025.12.3</version>
 	      <supplier>
 	        <name>Silicon Laboratories, Inc.</name>
@@ -1844,36 +1764,6 @@ referenced in this SBOM.)
             <expression>MSLA</expression>
           </licenses>
         </component>
-        <component bom-ref="silabs.simplicity_sdk:2025.12.3:cmsis_dsp" type="library">
-          <name>CMSIS-DSP</name>
-          <version>2025.12.3</version>
-	      <supplier>
-	        <name>Silicon Laboratories, Inc.</name>
-	      </supplier>
-          <licenses>
-            <expression>Apache-2.0</expression>
-          </licenses>
-          <pedigree>
-            <ancestors>
-              <component bom-ref="cmsis_dsp:1.15.0" type="library">
-                <supplier>
-                  <name>ARM-software</name>
-                </supplier>
-                <name>CMSIS-DSP</name>
-                <version>1.15.0</version>
-                <purl>pkg:github/ARM-software/CMSIS-DSP@v1.15.0</purl>
-                <pedigree>
-                  <notes>CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0</notes>
-                </pedigree>
-                <externalReferences>
-                  <reference type="website">
-                    <url>https://github.com/ARM-software/CMSIS-DSP</url>
-                  </reference>
-                </externalReferences>
-              </component>
-            </ancestors>
-          </pedigree>
-        </component>
         <component bom-ref="silabs.simplicity_sdk:2025.12.3:math_mvp" type="library">
           <name>MVP Math</name>
           <version>2025.12.3</version>
@@ -2036,16 +1926,6 @@ referenced in this SBOM.)
         </component>
         <component bom-ref="silabs.simplicity_sdk:2025.12.3:emlib_emu" type="library">
           <name>EMU</name>
-          <version>2025.12.3</version>
-	      <supplier>
-	        <name>Silicon Laboratories, Inc.</name>
-	      </supplier>
-          <licenses>
-            <expression>Zlib</expression>
-          </licenses>
-        </component>
-        <component bom-ref="silabs.simplicity_sdk:2025.12.3:mic_driver" type="library">
-          <name>Microphone</name>
           <version>2025.12.3</version>
 	      <supplier>
 	        <name>Silicon Laboratories, Inc.</name>
@@ -2296,6 +2176,56 @@ referenced in this SBOM.)
         </component>
         <component bom-ref="silabs.simplicity_sdk:2025.12.3:gpio" type="library">
           <name>GPIO Driver</name>
+          <version>2025.12.3</version>
+	      <supplier>
+	        <name>Silicon Laboratories, Inc.</name>
+	      </supplier>
+          <licenses>
+            <expression>Zlib</expression>
+          </licenses>
+        </component>
+        <component bom-ref="silabs.simplicity_sdk:2025.12.3:cmsis_dsp" type="library">
+          <name>CMSIS-DSP</name>
+          <version>2025.12.3</version>
+	      <supplier>
+	        <name>Silicon Laboratories, Inc.</name>
+	      </supplier>
+          <licenses>
+            <expression>Apache-2.0</expression>
+          </licenses>
+          <pedigree>
+            <ancestors>
+              <component bom-ref="cmsis_dsp:1.15.0" type="library">
+                <supplier>
+                  <name>ARM-software</name>
+                </supplier>
+                <name>CMSIS-DSP</name>
+                <version>1.15.0</version>
+                <purl>pkg:github/ARM-software/CMSIS-DSP@v1.15.0</purl>
+                <pedigree>
+                  <notes>CMSIS DSP Library as packaged and released by ARM-software, version 1.15.0</notes>
+                </pedigree>
+                <externalReferences>
+                  <reference type="website">
+                    <url>https://github.com/ARM-software/CMSIS-DSP</url>
+                  </reference>
+                </externalReferences>
+              </component>
+            </ancestors>
+          </pedigree>
+        </component>
+        <component bom-ref="silabs.simplicity_sdk:2025.12.3:mic_i2s_driver" type="library">
+          <name>I2S Microphone</name>
+          <version>2025.12.3</version>
+	      <supplier>
+	        <name>Silicon Laboratories, Inc.</name>
+	      </supplier>
+          <licenses>
+            <expression>Zlib</expression>
+          </licenses>
+        </component>
+        <component bom-ref="silabs.simplicity_sdk:2025.12.3:hal_usart" type="library">
+          <name>USART</name>
           <version>2025.12.3</version>
 	      <supplier>
 	        <name>Silicon Laboratories, Inc.</name>
