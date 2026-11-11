@@ -21,6 +21,7 @@ extern const sli_bt_gattdb_t gattdb;
 #define gattdb_cough_event                    21
 #define gattdb_environment_data               24
 #define gattdb_pendant_status                 27
+#define gattdb_ai_status                      29
 
 #define gattdb_generic_attribute_len          2
 #define gattdb_service_changed_char_len       4

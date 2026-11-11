@@ -137,6 +137,29 @@ static uint16_t inference_sequence = 0u;
 static volatile uint32_t total_chunks_written = 0u;
 static volatile bool stream_callback_error = false;
 static bool capture_paused = false;
+static uint8_t capture_state = 0u;
+static uint32_t inferred_windows = 0u;
+static uint32_t quiet_windows = 0u;
+
+static void set_capture_state(uint8_t state)
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  capture_state = state;
+  CORE_EXIT_ATOMIC();
+}
+
+static void count_window(bool inferred)
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  if (inferred) {
+    ++inferred_windows;
+  } else {
+    ++quiet_windows;
+  }
+  CORE_EXIT_ATOMIC();
+}
 
 /* Trang thai on dinh cua Stage 1 de chong nhay nhan va dem trung. */
 static uint8_t stable_class = BREATHSENSE_AI_OTHER;
@@ -632,21 +655,25 @@ static void live_ai_task(void *arg)
   std::printf("BreathSense AI product mode started\r\n");
 
   if (!breathsense_mfcc_runtime_init()) {
+    set_capture_state(3u);
     std::printf("AI ERROR: MFCC init\r\n");
     return;
   }
 
   if (!breathsense_inference_runtime_init()) {
+    set_capture_state(3u);
     std::printf("AI ERROR: Stage 1 inference init\r\n");
     return;
   }
 
   if (!breathsense_stage2_logmel_runtime_init()) {
+    set_capture_state(3u);
     std::printf("AI ERROR: Stage 2 Log-Mel init\r\n");
     return;
   }
 
   if (!breathsense_stage2_runtime_init()) {
+    set_capture_state(3u);
     std::printf("AI ERROR: Stage 2 inference init\r\n");
     return;
   }
@@ -666,6 +693,7 @@ static void live_ai_task(void *arg)
         std::printf("POWER: off-body, microphone and AI paused\r\n");
       }
 
+      set_capture_state(2u);
       (void)OSFlagPend(&live_ai_flag_group, LIVE_AI_FLAG_CAPTURE_CONTROL, 0u,
                        OS_OPT_PEND_FLAG_SET_ANY | OS_OPT_PEND_FLAG_CONSUME
                        | OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
@@ -676,18 +704,21 @@ static void live_ai_task(void *arg)
       stop_microphone_capture();
       invalidate_capture_result();
       streaming = false;
+      set_capture_state(3u);
       std::printf("AI ERROR: microphone callback\r\n");
     }
 
     if (!streaming) {
       const sl_status_t status = start_microphone_capture();
       if (status != SL_STATUS_OK) {
+        set_capture_state(3u);
         std::printf("AI ERROR: microphone start 0x%08lx\r\n",
                     static_cast<unsigned long>(status));
         OSTimeDlyHMSM(0, 0, 1, 0, OS_OPT_TIME_DLY | OS_OPT_TIME_HMSM_STRICT, &err);
         continue;
       }
       streaming = true;
+      set_capture_state(1u);
       last_processed_end_chunk = 0u;
       previous_log_tick = sl_sleeptimer_get_tick_count();
       if (!announced_ready) {
@@ -750,6 +781,29 @@ static void live_ai_task(void *arg)
                           &peak,
                           &mean_absolute);
 
+    const bool active_audio = audio_is_active(peak, mean_absolute);
+    if (!active_audio) {
+      /* Keep the existing two-window class confirmation for quiet audio.
+       * Zero confidence marks the absence of a model inference. */
+      const float quiet_probabilities[4] = {};
+      bool class_changed = false;
+      const uint8_t quiet_class = update_stable_class(
+        quiet_probabilities, BREATHSENSE_AI_OTHER, false, &class_changed);
+      publish_result(quiet_class, 0.0f);
+      if (class_changed) {
+        breathsense_indicator_set_class(
+          static_cast<breathsense_ai_class_t>(quiet_class));
+      }
+      count_window(false);
+#if BS_AI_DEBUG_RAW_LOGS
+      std::printf("AI GATE: quiet peak=%lu mean_abs=%lu\r\n",
+                  static_cast<unsigned long>(peak),
+                  static_cast<unsigned long>(mean_absolute));
+#endif
+      previous_log_tick = sl_sleeptimer_get_tick_count();
+      continue;
+    }
+
     const uint32_t processing_start_tick =
       sl_sleeptimer_get_tick_count();
 
@@ -759,7 +813,9 @@ static void live_ai_task(void *arg)
           BS_AUDIO_WINDOW_SAMPLES,
           shared_model_input,
           BREATHSENSE_MODEL_INPUT_COUNT)) {
-      (void)sl_mic_stop();
+      stop_microphone_capture();
+      invalidate_capture_result();
+      set_capture_state(3u);
       std::printf("AI ERROR: MFCC processing\r\n");
       return;
     }
@@ -773,14 +829,15 @@ static void live_ai_task(void *arg)
           BREATHSENSE_MODEL_INPUT_COUNT,
           output_int8,
           probabilities)) {
-      (void)sl_mic_stop();
+      stop_microphone_capture();
+      invalidate_capture_result();
+      set_capture_state(3u);
       std::printf("AI ERROR: Stage 1 inference\r\n");
       return;
     }
 
     const uint8_t raw_top1 = find_top1(probabilities);
-    const bool active_audio =
-      audio_is_active(peak, mean_absolute);
+    count_window(true);
 
     bool class_changed = false;
 
@@ -920,6 +977,19 @@ extern "C" void breathsense_ai_set_capture_paused(bool paused)
   if (changed) {
     live_ai_post_flag(LIVE_AI_FLAG_CAPTURE_CONTROL);
   }
+}
+
+extern "C" void breathsense_ai_status(uint8_t data[BREATHSENSE_AI_STATUS_SIZE])
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  data[0] = 1u;
+  data[1] = capture_state;
+  for (unsigned i = 0u; i < 4u; ++i) {
+    data[2u + i] = static_cast<uint8_t>(inferred_windows >> (8u * i));
+    data[6u + i] = static_cast<uint8_t>(quiet_windows >> (8u * i));
+  }
+  CORE_EXIT_ATOMIC();
 }
 
 extern "C" bool breathsense_ai_get_latest(

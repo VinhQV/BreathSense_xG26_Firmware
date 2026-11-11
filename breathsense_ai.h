@@ -28,6 +28,9 @@ typedef struct {
   bool valid;
 } breathsense_ai_result_t;
 
+#define BREATHSENSE_AI_STATUS_SIZE 10u
+/* Wire states: 0 starting, 1 capturing, 2 paused, 3 fault. */
+void breathsense_ai_status(uint8_t data[BREATHSENSE_AI_STATUS_SIZE]);
 void breathsense_ai_init(void);
 /* Request a capture change. The AI task owns the microphone lifecycle. */
 void breathsense_ai_set_capture_paused(bool paused);

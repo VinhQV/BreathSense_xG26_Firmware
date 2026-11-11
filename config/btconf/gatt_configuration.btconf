@@ -74,5 +74,11 @@
         <read authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
+    <characteristic const="false" id="ai_status" name="AI Status" uuid="b5e00006-7a4b-4c6d-9e10-112233445566">
+      <value length="10" type="user" variable_length="false"/>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
   </service>
 </gatt>

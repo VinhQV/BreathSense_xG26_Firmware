@@ -244,6 +244,32 @@ wear detection add a contact sensor in the enclosure. A Hall sensor and
 magnet can track closure when the necklace clasp is mechanically designed
 for it, but a closed clasp on a table can still look closed.
 
+### AI runtime status
+
+Read AI Status at `b5e00006-7a4b-4c6d-9e10-112233445566`.
+The ten-byte format is version 1, followed by the actual capture state
+(0 starting, 1 capturing, 2 paused, 3 fault), a little-endian uint32
+count of inferred windows, and a little-endian uint32 count of quiet
+windows skipped since boot. Existing Pendant Status remains six bytes.
+
+The audio gate runs before MFCC and Stage 1, using the configured peak
+and mean-absolute thresholds. Quiet windows still advance the existing
+class confirmation logic. Their reported confidence is zero because
+inference was skipped. Compare the two window counters in a quiet room
+and during speech/cough playback to check the optimization.
+
+The wearable uses these capture transitions:
+- Initial unknown state starts with capture enabled.
+- Confirmed off-body pauses capture.
+- Unknown preserves the previous capture mode.
+- Confirmed worn resumes capture after an off-body pause.
+
+Board validation must include repeated pause/resume, quiet-to-cough,
+two coughs separated by silence, soft coughs near the gate threshold,
+BLE status reads in each state, and current measurements on battery.
+Record missed events as well as false positives. The counters measure
+software work, while battery savings require current measurements.
+
 ## Testing
 
 Recommended validation scenarios:

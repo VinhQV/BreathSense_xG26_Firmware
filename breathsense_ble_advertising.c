@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "em_core.h"
+#include "breathsense_ai.h"
 #include "breathsense_pendant.h"
 #include "gatt_db.h"
 #include "sl_bluetooth.h"
@@ -517,17 +518,24 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
     case sl_bt_evt_gatt_server_user_read_request_id: {
       const sl_bt_evt_gatt_server_user_read_request_t *request =
         &evt->data.evt_gatt_server_user_read_request;
-      if (request->characteristic == gattdb_pendant_status) {
-        uint8_t value[BREATHSENSE_PENDANT_STATUS_SIZE];
+      if (request->characteristic == gattdb_pendant_status
+          || request->characteristic == gattdb_ai_status) {
+        uint8_t value[BREATHSENSE_AI_STATUS_SIZE];
         const uint16_t offset = request->offset;
-        breathsense_pendant_status(value);
-        if (offset > sizeof(value)) {
+        uint16_t size = BREATHSENSE_PENDANT_STATUS_SIZE;
+        if (request->characteristic == gattdb_ai_status) {
+          breathsense_ai_status(value);
+          size = BREATHSENSE_AI_STATUS_SIZE;
+        } else {
+          breathsense_pendant_status(value);
+        }
+        if (offset > size) {
           (void)sl_bt_gatt_server_send_user_read_response(
             request->connection, request->characteristic, 0x07u, 0u, NULL, NULL);
         } else {
           (void)sl_bt_gatt_server_send_user_read_response(
             request->connection, request->characteristic, 0u,
-            sizeof(value) - offset, &value[offset], NULL);
+            size - offset, &value[offset], NULL);
         }
       }
       break;
