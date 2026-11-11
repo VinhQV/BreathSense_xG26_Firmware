@@ -20,7 +20,6 @@
 #define PENDANT_TASK_PRIORITY 20u
 #define PENDANT_STACK_SIZE 512u
 #define MOTION_DELTA_G 0.030f
-#define WAKE_DELTA_G 0.080f
 #define MOTION_SAMPLES_MIN 6u
 #define FLAT_SAMPLES_MIN 48u
 #define ADC_SAMPLES 8u
@@ -170,18 +169,6 @@ static void pendant_task(void *arg)
     const bool is_flat = sample_valid && fabsf(axes[2]) >= 0.90f
                          && fabsf(axes[0]) < 0.40f && fabsf(axes[1]) < 0.40f;
 
-    if (wear == WEAR_LIKELY_OFF_BODY && (!is_flat || delta >= WAKE_DELTA_G)) {
-      wear = WEAR_UNKNOWN;
-      candidate = WEAR_UNKNOWN;
-      candidate_windows = 0u;
-      samples = 0u;
-      valid = 0u;
-      motion = 0u;
-      flat = 0u;
-      publish_status(wear, sample_valid, supply_mv, 0u, 0u);
-      breathsense_ai_set_capture_paused(false);
-    }
-
     if (sample_valid) {
       ++valid;
       motion += delta >= MOTION_DELTA_G;
@@ -224,7 +211,10 @@ static void pendant_task(void *arg)
       voltage_windows = 0u;
     }
     publish_status(wear, imu_valid, supply_mv, motion, flat);
-    breathsense_ai_set_capture_paused(wear == WEAR_LIKELY_OFF_BODY);
+    /* An unknown wear state preserves the last confirmed capture decision. */
+    if (wear != WEAR_UNKNOWN) {
+      breathsense_ai_set_capture_paused(wear == WEAR_LIKELY_OFF_BODY);
+    }
     printf("PENDANT: wear=%u vmcu_mv=%u imu=%u motion=%u flat=%u\r\n",
            (unsigned)wear, supply_mv, (unsigned)imu_valid, motion, flat);
     samples = 0u;

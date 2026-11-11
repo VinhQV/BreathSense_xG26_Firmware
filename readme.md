@@ -211,8 +211,10 @@ flat windows for likely off-body. A motionless wearer, a pendant under
 clothing, and a pendant moving in a bag can be ambiguous. The prototype
 pauses microphone capture and inference after four still, flat windows.
 The LED turns off while BLE, the IMU, and pending cough events remain
-available. Tilting or moving the pendant wakes audio capture before wear
-is confirmed. Inference waits for a fresh 1.6-second audio window.
+available. The unknown state preserves the current capture mode. After
+an off-body pause, audio capture resumes when two consecutive windows
+confirm the likely-worn state. Inference waits for a fresh 1.6-second
+audio window.
 
 Read the **Pendant Status** characteristic
 `b5e00005-7a4b-4c6d-9e10-112233445566` over BLE. The same measurements are
