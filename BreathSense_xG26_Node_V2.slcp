@@ -44,6 +44,7 @@ source:
 - path: breathsense_ble_advertising.c
 - path: breathsense_ble_tx.c
 - path: src/core/breathsense_event.c
+- path: src/core/breathsense_pendant.c
 - path: src/core/breathsense_telemetry.c
 - path: src/indicator/breathsense_indicator.c
 tag:
@@ -73,6 +74,7 @@ include:
 - path: src/core
   file_list:
   - path: breathsense_event.h
+  - path: breathsense_pendant.h
   - path: breathsense_protocol_config.h
   - path: breathsense_telemetry.h
 - path: src/indicator
@@ -159,6 +161,12 @@ component:
 - package: simplicity_sdk
   vendor: silabs
   id: mic_i2s_driver
+- package: board_drivers
+  vendor: silabs
+  id: icm40627_driver
+- package: platform_core
+  vendor: silabs
+  id: emlib_iadc
 - package: simplicity_sdk
   vendor: silabs
   id: micriumos_kernel

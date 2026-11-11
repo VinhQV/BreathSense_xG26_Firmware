@@ -201,6 +201,44 @@ cmake_gcc/build/base/
 
 Available output formats include `.s37`, `.hex`, `.bin`, and `.out`.
 
+### Pendant wear sensing and supply voltage
+
+For the BRD2608A neck pendant, the ICM-40627 is sampled at 25 Hz with the
+gyroscope off. The initial rules assume the pendant hangs roughly upright
+during movement and rests flat when set on a table. They require two
+consecutive two-second windows for likely worn or unknown and four still,
+flat windows for likely off-body. A motionless wearer, a pendant under
+clothing, and a pendant moving in a bag can be ambiguous. The prototype
+does not use these labels to discard any cough events.
+
+Read the **Pendant Status** characteristic
+`b5e00005-7a4b-4c6d-9e10-112233445566` over BLE. The same measurements are
+printed in the `PENDANT:` VCOM log.
+
+| Byte | Meaning |
+| --- | --- |
+| 0 | Format version, currently 1 |
+| 1 | Wear estimate: 0 unknown, 1 likely worn, 2 likely off-body |
+| 2–3 | Supply rail millivolts, unsigned little-endian. 0 means unavailable. |
+| 4 | Motion sample count over the last 50 samples. 255 means unavailable. |
+| 5 | Flat sample count over the last 50 samples. 255 means unavailable. |
+
+The ADC samples AVDD, which follows the active supply. With USB connected the
+rail is normally around 3.3 V. To check a CR2032, unplug USB, power the kit from
+the cell, and read the characteristic over BLE. Compare against a multimeter
+at the board rail. Battery percentage requires a CR2032 discharge profile
+measured under the firmware's actual load, including microphone, inference,
+and radio. A rail voltage in millivolts alone cannot identify the source.
+
+Before using the wear estimate in reporting, log at least 30 seconds each
+for flat on a table, upright on a stand, worn while sitting, worn while
+walking, worn while lying down, carried in a bag, and put on/taken off.
+Compare BLE or UART states with the labels and report false worn, false
+off-body, unknown coverage, and transition delay separately. For definitive
+wear detection add a contact sensor in the enclosure. A Hall sensor and
+magnet can track closure when the necklace clasp is mechanically designed
+for it, but a closed clasp on a table can still look closed.
+
 ## Testing
 
 Recommended validation scenarios:

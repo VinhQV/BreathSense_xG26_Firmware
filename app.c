@@ -16,6 +16,7 @@
 #include "breathsense_ai.h"
 #include "breathsense_ble.h"
 #include "breathsense_event.h"
+#include "breathsense_pendant.h"
 #include "breathsense_sensor.h"
 #include "breathsense_telemetry.h"
 
@@ -36,6 +37,7 @@ void app_init(void)
    * Sensor va AI tu tao task/event flag rieng.
    */
   breathsense_sensor_init();
+  breathsense_pendant_init();
   breathsense_ai_init();
 }
 

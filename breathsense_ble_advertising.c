@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "em_core.h"
+#include "breathsense_pendant.h"
 #include "gatt_db.h"
 #include "sl_bluetooth.h"
 #include "sl_status.h"
@@ -513,6 +514,25 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
   sl_status_t status;
 
   switch (SL_BT_MSG_ID(evt->header)) {
+    case sl_bt_evt_gatt_server_user_read_request_id: {
+      const sl_bt_evt_gatt_server_user_read_request_t *request =
+        &evt->data.evt_gatt_server_user_read_request;
+      if (request->characteristic == gattdb_pendant_status) {
+        uint8_t value[BREATHSENSE_PENDANT_STATUS_SIZE];
+        const uint16_t offset = request->offset;
+        breathsense_pendant_status(value);
+        if (offset > sizeof(value)) {
+          (void)sl_bt_gatt_server_send_user_read_response(
+            request->connection, request->characteristic, 0x07u, 0u, NULL, NULL);
+        } else {
+          (void)sl_bt_gatt_server_send_user_read_response(
+            request->connection, request->characteristic, 0u,
+            sizeof(value) - offset, &value[offset], NULL);
+        }
+      }
+      break;
+    }
+
     case sl_bt_evt_system_boot_id:
       advertising_set_handle = BREATHSENSE_INVALID_HANDLE;
       connection_handle = BREATHSENSE_INVALID_HANDLE;
