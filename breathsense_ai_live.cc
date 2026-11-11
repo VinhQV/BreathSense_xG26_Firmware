@@ -72,8 +72,10 @@
  */
 #define LIVE_AI_FLAG_AUDIO_READY        ((OS_FLAGS)1u << 0u)
 #define LIVE_AI_FLAG_STREAM_ERROR       ((OS_FLAGS)1u << 1u)
+#define LIVE_AI_FLAG_CAPTURE_CONTROL   ((OS_FLAGS)1u << 2u)
 #define LIVE_AI_FLAG_ALL                \
-  (LIVE_AI_FLAG_AUDIO_READY | LIVE_AI_FLAG_STREAM_ERROR)
+  (LIVE_AI_FLAG_AUDIO_READY | LIVE_AI_FLAG_STREAM_ERROR \
+   | LIVE_AI_FLAG_CAPTURE_CONTROL)
 
 static_assert(
   LIVE_AI_WINDOW_CHUNKS * LIVE_AI_CHUNK_SAMPLES
@@ -134,6 +136,7 @@ static uint16_t inference_sequence = 0u;
 
 static volatile uint32_t total_chunks_written = 0u;
 static volatile bool stream_callback_error = false;
+static bool capture_paused = false;
 
 /* Trang thai on dinh cua Stage 1 de chong nhay nhan va dem trung. */
 static uint8_t stable_class = BREATHSENSE_AI_OTHER;
@@ -563,46 +566,70 @@ static void run_stage2_and_queue_cough(
   }
 }
 
+static bool is_capture_paused()
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  const bool paused = capture_paused;
+  CORE_EXIT_ATOMIC();
+  return paused;
+}
+
+static void stop_microphone_capture()
+{
+  (void)sl_mic_deinit();
+  (void)sl_board_disable_sensor(SL_BOARD_SENSOR_MICROPHONE);
+}
+
+static sl_status_t start_microphone_capture()
+{
+  sl_status_t status = sl_board_enable_sensor(SL_BOARD_SENSOR_MICROPHONE);
+  if (status != SL_STATUS_OK) {
+    return status;
+  }
+
+  RTOS_ERR err;
+  OSTimeDlyHMSM(0, 0, 0, 50, OS_OPT_TIME_DLY | OS_OPT_TIME_HMSM_STRICT, &err);
+  if (RTOS_ERR_CODE_GET(err) != RTOS_ERR_NONE) {
+    (void)sl_board_disable_sensor(SL_BOARD_SENSOR_MICROPHONE);
+    return SL_STATUS_FAIL;
+  }
+
+  status = sl_mic_init(LIVE_AI_SAMPLE_RATE_HZ, LIVE_AI_CHANNEL_COUNT);
+  if (status != SL_STATUS_OK) {
+    (void)sl_board_disable_sensor(SL_BOARD_SENSOR_MICROPHONE);
+    return status;
+  }
+
+  total_chunks_written = 0u;
+  stream_callback_error = false;
+  stable_class = BREATHSENSE_AI_OTHER;
+  stable_class_valid = false;
+  candidate_class = BREATHSENSE_AI_OTHER;
+  candidate_hits = 0u;
+
+  status = sl_mic_start_streaming(microphone_stream_buffer,
+                                  LIVE_AI_CHUNK_SAMPLES,
+                                  microphone_stream_callback);
+  if (status != SL_STATUS_OK) {
+    stop_microphone_capture();
+  }
+  return status;
+}
+
+static void invalidate_capture_result()
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  latest_result.valid = false;
+  CORE_EXIT_ATOMIC();
+  breathsense_indicator_set_class(BREATHSENSE_AI_OTHER);
+}
+
 static void live_ai_task(void *arg)
 {
-  RTOS_ERR err;
-  sl_status_t status;
-
   (void)arg;
-
   std::printf("BreathSense AI product mode started\r\n");
-
-  status =
-    sl_board_enable_sensor(SL_BOARD_SENSOR_MICROPHONE);
-
-  if (status != SL_STATUS_OK) {
-    std::printf("AI ERROR: microphone power 0x%08lx\r\n",
-                static_cast<unsigned long>(status));
-    return;
-  }
-
-  OSTimeDlyHMSM(0,
-                0,
-                0,
-                50,
-                OS_OPT_TIME_DLY | OS_OPT_TIME_HMSM_STRICT,
-                &err);
-
-  if (RTOS_ERR_CODE_GET(err) != RTOS_ERR_NONE) {
-    std::printf("AI ERROR: startup delay %ld\r\n",
-                static_cast<long>(RTOS_ERR_CODE_GET(err)));
-    return;
-  }
-
-  status =
-    sl_mic_init(LIVE_AI_SAMPLE_RATE_HZ,
-                LIVE_AI_CHANNEL_COUNT);
-
-  if (status != SL_STATUS_OK) {
-    std::printf("AI ERROR: microphone init 0x%08lx\r\n",
-                static_cast<unsigned long>(status));
-    return;
-  }
 
   if (!breathsense_mfcc_runtime_init()) {
     std::printf("AI ERROR: MFCC init\r\n");
@@ -624,38 +651,54 @@ static void live_ai_task(void *arg)
     return;
   }
 
-  total_chunks_written = 0u;
-  stream_callback_error = false;
-
-  stable_class = BREATHSENSE_AI_OTHER;
-  stable_class_valid = false;
-  candidate_class = BREATHSENSE_AI_OTHER;
-  candidate_hits = 0u;
-
-  status =
-    sl_mic_start_streaming(microphone_stream_buffer,
-                           LIVE_AI_CHUNK_SAMPLES,
-                           microphone_stream_callback);
-
-  if (status != SL_STATUS_OK) {
-    std::printf("AI ERROR: streaming start 0x%08lx\r\n",
-                static_cast<unsigned long>(status));
-    return;
-  }
-
-  std::printf("MIC TEST: I2S RIGHT\r\n");
-  std::printf("AI READY: Stage1=COUGH,OTHER,SNEEZE,SPEECH "
-              "Stage2=DRY,WET\r\n");
-
+  RTOS_ERR err;
+  bool streaming = false;
+  bool announced_ready = false;
   uint32_t last_processed_end_chunk = 0u;
-  uint32_t previous_log_tick =
-    sl_sleeptimer_get_tick_count();
+  uint32_t previous_log_tick = 0u;
 
   while (1) {
-    if (stream_callback_error) {
-      (void)sl_mic_stop();
+    if (is_capture_paused()) {
+      if (streaming) {
+        stop_microphone_capture();
+        invalidate_capture_result();
+        streaming = false;
+        std::printf("POWER: off-body, microphone and AI paused\r\n");
+      }
+
+      (void)OSFlagPend(&live_ai_flag_group, LIVE_AI_FLAG_CAPTURE_CONTROL, 0u,
+                       OS_OPT_PEND_FLAG_SET_ANY | OS_OPT_PEND_FLAG_CONSUME
+                       | OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
+      continue;
+    }
+
+    if (streaming && stream_callback_error) {
+      stop_microphone_capture();
+      invalidate_capture_result();
+      streaming = false;
       std::printf("AI ERROR: microphone callback\r\n");
-      return;
+    }
+
+    if (!streaming) {
+      const sl_status_t status = start_microphone_capture();
+      if (status != SL_STATUS_OK) {
+        std::printf("AI ERROR: microphone start 0x%08lx\r\n",
+                    static_cast<unsigned long>(status));
+        OSTimeDlyHMSM(0, 0, 1, 0, OS_OPT_TIME_DLY | OS_OPT_TIME_HMSM_STRICT, &err);
+        continue;
+      }
+      streaming = true;
+      last_processed_end_chunk = 0u;
+      previous_log_tick = sl_sleeptimer_get_tick_count();
+      if (!announced_ready) {
+        std::printf("MIC TEST: I2S RIGHT\r\n");
+        std::printf("AI READY: Stage1=COUGH,OTHER,SNEEZE,SPEECH "
+                    "Stage2=DRY,WET\r\n");
+        announced_ready = true;
+      } else {
+        std::printf("POWER: microphone and AI resumed\r\n");
+      }
+      continue;
     }
 
     const uint32_t available_chunks =
@@ -675,24 +718,14 @@ static void live_ai_task(void *arg)
        * Khong polling va khong delay 5 ms.
        * Task ngu tai day cho den khi microphone callback post flag.
        */
-      const OS_FLAGS flags =
-        OSFlagPend(&live_ai_flag_group,
-                   LIVE_AI_FLAG_ALL,
-                   0u,
-                   OS_OPT_PEND_FLAG_SET_ANY
-                   | OS_OPT_PEND_FLAG_CONSUME
-                   | OS_OPT_PEND_BLOCKING,
-                   DEF_NULL,
-                   &err);
+      (void)OSFlagPend(&live_ai_flag_group, LIVE_AI_FLAG_ALL, 0u,
+                       OS_OPT_PEND_FLAG_SET_ANY | OS_OPT_PEND_FLAG_CONSUME
+                       | OS_OPT_PEND_BLOCKING, DEF_NULL, &err);
 
       if (RTOS_ERR_CODE_GET(err) != RTOS_ERR_NONE) {
         std::printf("AI ERROR: flag pend %ld\r\n",
                     static_cast<long>(RTOS_ERR_CODE_GET(err)));
         continue;
-      }
-
-      if ((flags & LIVE_AI_FLAG_STREAM_ERROR) != 0u) {
-        stream_callback_error = true;
       }
 
       /*
@@ -875,6 +908,18 @@ extern "C" void breathsense_ai_init(void)
                &err);
 
   EFM_ASSERT(RTOS_ERR_CODE_GET(err) == RTOS_ERR_NONE);
+}
+
+extern "C" void breathsense_ai_set_capture_paused(bool paused)
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  const bool changed = capture_paused != paused;
+  capture_paused = paused;
+  CORE_EXIT_ATOMIC();
+  if (changed) {
+    live_ai_post_flag(LIVE_AI_FLAG_CAPTURE_CONTROL);
+  }
 }
 
 extern "C" bool breathsense_ai_get_latest(

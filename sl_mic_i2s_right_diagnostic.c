@@ -174,6 +174,7 @@ sl_status_t sl_mic_init(uint32_t sample_rate, uint8_t n_channels)
     /* Set up DMA channel to discard I2S right data */
     status = DMADRV_AllocateChannel(&dma_channel_right, NULL);
     if ( status != ECODE_EMDRV_DMADRV_OK ) {
+      DMADRV_FreeChannel(dma_channel_left);
       return SL_STATUS_FAIL;
     }
 

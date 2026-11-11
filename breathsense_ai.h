@@ -29,6 +29,8 @@ typedef struct {
 } breathsense_ai_result_t;
 
 void breathsense_ai_init(void);
+/* Request a capture change. The AI task owns the microphone lifecycle. */
+void breathsense_ai_set_capture_paused(bool paused);
 
 bool breathsense_ai_get_latest(
   breathsense_ai_result_t *result
