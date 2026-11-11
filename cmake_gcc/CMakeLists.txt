@@ -117,6 +117,11 @@ if(BS_SLC_SOURCES
             NAME
         )
 
+        # Use the BRD2608A right microphone in the mono capture path.
+        if(BS_SOURCE_NAME STREQUAL "sl_mic_i2s.c")
+            set(BS_SOURCE "${BS_ROOT}/sl_mic_i2s_right_diagnostic.c")
+        endif()
+
         set(BS_REMOVE_SOURCE FALSE)
 
         if(BS_SOURCE_NAME STREQUAL "sl_tflite_micro_init.cc"

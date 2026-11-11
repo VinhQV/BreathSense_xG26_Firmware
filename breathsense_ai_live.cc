@@ -643,6 +643,7 @@ static void live_ai_task(void *arg)
     return;
   }
 
+  std::printf("MIC TEST: I2S RIGHT\r\n");
   std::printf("AI READY: Stage1=COUGH,OTHER,SNEEZE,SPEECH "
               "Stage2=DRY,WET\r\n");
 

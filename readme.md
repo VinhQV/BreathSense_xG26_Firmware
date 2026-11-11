@@ -165,6 +165,10 @@ For example, a decoded temperature value of `2811` represents `28.11 °C`.
 7. Flash the generated firmware.
 8. Open the VCOM console using `115200 8-N-1`, without flow control.
 
+The BRD2608A has two onboard I2S microphones. The checked-in CMake build
+captures the right microphone as a 16 kHz mono stream. Use the CMake
+project below in Simplicity Studio or from the command line.
+
 A successful startup should include messages similar to:
 
 ```text
@@ -174,6 +178,7 @@ Si7021 task started: event-driven
 Si7021 detected
 BLE TX task started: event-driven OSFlagPend
 Stage2 runtime ready
+MIC TEST: I2S RIGHT
 AI READY: Stage1=COUGH,OTHER,SNEEZE,SPEECH Stage2=DRY,WET
 ```
 
