@@ -23,6 +23,7 @@
 #include "gatt_db.h"
 #include "sl_bluetooth.h"
 #include "sl_status.h"
+#include "breathsense_time_sync.h"
 
 /*******************************************************************************
  ******************************** CAU HINH *************************************
@@ -55,6 +56,7 @@ static bool bluetooth_booted = false;
 static bool connected = false;
 static bool cough_notification_enabled = false;
 static bool environment_notification_enabled = false;
+static bool time_synchronized_for_connection = false;
 
 static uint32_t cough_notification_sent_count = 0u;
 static uint32_t environment_notification_sent_count = 0u;
@@ -85,6 +87,22 @@ static void notify_state_changed(void)
   if (state_changed_callback != NULL) {
     state_changed_callback();
   }
+}
+
+static uint32_t decode_uint32_le(const uint8_t value[4])
+{
+  return ((uint32_t)value[0])
+         | ((uint32_t)value[1] << 8u)
+         | ((uint32_t)value[2] << 16u)
+         | ((uint32_t)value[3] << 24u);
+}
+
+static void encode_uint32_le(uint8_t value[4], uint32_t number)
+{
+  value[0] = (uint8_t)(number & 0xFFu);
+  value[1] = (uint8_t)((number >> 8u) & 0xFFu);
+  value[2] = (uint8_t)((number >> 16u) & 0xFFu);
+  value[3] = (uint8_t)((number >> 24u) & 0xFFu);
 }
 
 static sl_status_t start_connectable_advertising(void)
@@ -147,7 +165,9 @@ static sl_status_t start_connectable_advertising(void)
 
 static void encode_cough_payload(
   uint8_t payload[BREATHSENSE_COUGH_PAYLOAD_SIZE],
+  uint8_t flags,
   uint8_t cough_type,
+  uint32_t timestamp_s,
   uint16_t event_counter)
 {
   memset(payload, 0, BREATHSENSE_COUGH_PAYLOAD_SIZE);
@@ -156,11 +176,15 @@ static void encode_cough_payload(
    * Payload 8 byte:
    * [0]    flags
    * [1]    cough_type
-   * [2:5]  event timestamp, hien tai bang 0
+   * [2:5]  event start timestamp or local uptime, little-endian
    * [6:7]  event_counter little-endian
    */
-  payload[0] = 0u;
+  payload[0] = flags;
   payload[1] = cough_type;
+  payload[2] = (uint8_t)(timestamp_s & 0xFFu);
+  payload[3] = (uint8_t)((timestamp_s >> 8u) & 0xFFu);
+  payload[4] = (uint8_t)((timestamp_s >> 16u) & 0xFFu);
+  payload[5] = (uint8_t)((timestamp_s >> 24u) & 0xFFu);
   payload[6] = (uint8_t)(event_counter & 0xFFu);
   payload[7] = (uint8_t)((event_counter >> 8u) & 0xFFu);
 }
@@ -297,6 +321,7 @@ void breathsense_ble_advertising_init(void)
   connected = false;
   cough_notification_enabled = false;
   environment_notification_enabled = false;
+  time_synchronized_for_connection = false;
 
   cough_notification_sent_count = 0u;
   environment_notification_sent_count = 0u;
@@ -332,6 +357,7 @@ bool breathsense_ble_advertising_is_ready(void)
       bluetooth_booted
       && connected
       && cough_notification_enabled
+      && time_synchronized_for_connection
       && (connection_handle != BREATHSENSE_INVALID_HANDLE);
 
     CORE_EXIT_ATOMIC();
@@ -362,7 +388,9 @@ bool breathsense_ble_advertising_is_environment_ready(void)
 }
 
 bool breathsense_ble_advertising_send_cough_event(
+  uint8_t flags,
   uint8_t cough_type,
+  uint32_t timestamp_s,
   uint16_t event_counter)
 {
   uint8_t payload[BREATHSENSE_COUGH_PAYLOAD_SIZE];
@@ -380,7 +408,9 @@ bool breathsense_ble_advertising_send_cough_event(
   }
 
   encode_cough_payload(payload,
+                       flags,
                        cough_type,
+                       timestamp_s,
                        event_counter);
 
   if (!write_and_notify(gattdb_cough_event,
@@ -462,6 +492,7 @@ void breathsense_ble_advertising_print_status(void)
   bool local_connected;
   bool local_cough_enabled;
   bool local_environment_enabled;
+  bool local_connection_time_synchronized;
 
   uint32_t local_cough_sent;
   uint32_t local_environment_sent;
@@ -480,6 +511,8 @@ void breathsense_ble_advertising_print_status(void)
     local_connected = connected;
     local_cough_enabled = cough_notification_enabled;
     local_environment_enabled = environment_notification_enabled;
+    local_connection_time_synchronized =
+      time_synchronized_for_connection;
 
     local_cough_sent = cough_notification_sent_count;
     local_environment_sent = environment_notification_sent_count;
@@ -490,7 +523,8 @@ void breathsense_ble_advertising_print_status(void)
   }
 
   printf("BLE STATUS: boot=%u adv_set=%u conn=%u connected=%u "
-         "cough_sub=%u env_sub=%u cough_sent=%lu env_sent=%lu "
+         "cough_sub=%u env_sub=%u time_sync=%u "
+         "cough_sent=%lu env_sent=%lu "
          "failed=%lu last=0x%08lX\r\n",
          local_booted ? 1u : 0u,
          local_adv_set,
@@ -498,6 +532,7 @@ void breathsense_ble_advertising_print_status(void)
          local_connected ? 1u : 0u,
          local_cough_enabled ? 1u : 0u,
          local_environment_enabled ? 1u : 0u,
+         local_connection_time_synchronized ? 1u : 0u,
          (unsigned long)local_cough_sent,
          (unsigned long)local_environment_sent,
          (unsigned long)local_failed,
@@ -521,6 +556,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       connected = false;
       cough_notification_enabled = false;
       environment_notification_enabled = false;
+      time_synchronized_for_connection = false;
 
       printf("BLE: stack booted\r\n");
 
@@ -540,6 +576,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       connected = true;
       cough_notification_enabled = false;
       environment_notification_enabled = false;
+      time_synchronized_for_connection = false;
 
       printf("BLE: gateway connected, handle=%u\r\n",
              connection_handle);
@@ -593,14 +630,113 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       break;
     }
 
+    case sl_bt_evt_gatt_server_user_write_request_id:
+    {
+      const sl_bt_evt_gatt_server_user_write_request_t *request =
+        &evt->data.evt_gatt_server_user_write_request;
+
+      if (request->characteristic != gattdb_time_sync) {
+        break;
+      }
+
+      uint8_t att_error = 0u;
+
+      if (request->offset != 0u) {
+        att_error = (uint8_t)SL_STATUS_BT_ATT_INVALID_OFFSET;
+      } else if (request->value.len != 4u) {
+        att_error = (uint8_t)SL_STATUS_BT_ATT_INVALID_ATT_LENGTH;
+      }
+
+      uint32_t epoch_s = 0u;
+
+      if (att_error == 0u) {
+        epoch_s = decode_uint32_le(request->value.data);
+        if (!breathsense_time_sync_set_epoch(epoch_s)) {
+          att_error = 0x13u; /* ATT value not allowed: Pi clock is not set. */
+        }
+      }
+
+      status = sl_bt_gatt_server_send_user_write_response(
+        request->connection,
+        request->characteristic,
+        att_error);
+
+      if (status != SL_STATUS_OK) {
+        print_status_error("send time write response", status);
+      }
+
+      if ((att_error == 0u) && (status == SL_STATUS_OK)) {
+        {
+          CORE_DECLARE_IRQ_STATE;
+
+          CORE_ENTER_ATOMIC();
+          time_synchronized_for_connection = true;
+          CORE_EXIT_ATOMIC();
+        }
+
+        printf("BLE: time synchronized, epoch=%lu\r\n",
+               (unsigned long)epoch_s);
+
+        /*
+         * Wake the BLE TX task only after the new time base is installed.
+         * Offline cough events keep their original immutable timestamps.
+         */
+        notify_state_changed();
+      }
+
+      break;
+    }
+
+    case sl_bt_evt_gatt_server_user_read_request_id:
+    {
+      const sl_bt_evt_gatt_server_user_read_request_t *request =
+        &evt->data.evt_gatt_server_user_read_request;
+
+      if (request->characteristic != gattdb_time_sync) {
+        break;
+      }
+
+      uint32_t epoch_s = 0u;
+      uint8_t value[4];
+      uint16_t sent_length = 0u;
+
+      (void)breathsense_time_sync_get_epoch(&epoch_s);
+      encode_uint32_le(value, epoch_s);
+
+      status = sl_bt_gatt_server_send_user_read_response(
+        request->connection,
+        request->characteristic,
+        0u,
+        sizeof(value),
+        value,
+        &sent_length);
+
+      if (status != SL_STATUS_OK) {
+        print_status_error("send time read response", status);
+      }
+
+      break;
+    }
+
     case sl_bt_evt_connection_closed_id:
       printf("BLE: gateway disconnected, reason=0x%04X\r\n",
              evt->data.evt_connection_closed.reason);
+
+      {
+        uint32_t retained_epoch_s = 0u;
+        const bool retained_time_valid =
+          breathsense_time_sync_get_epoch(&retained_epoch_s);
+
+        printf("BLE: clock retained, epoch=%lu valid=%u\r\n",
+               (unsigned long)retained_epoch_s,
+               retained_time_valid ? 1u : 0u);
+      }
 
       connection_handle = BREATHSENSE_INVALID_HANDLE;
       connected = false;
       cough_notification_enabled = false;
       environment_notification_enabled = false;
+      time_synchronized_for_connection = false;
 
       /*
        * Danh thuc task de task dung gui ngay khi connection da dong.

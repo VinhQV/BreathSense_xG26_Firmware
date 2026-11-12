@@ -1,0 +1,61 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gatt gatt_caching="true" generic_attribute_service="true" header="gatt_db.h" name="BreathSense Relay" out="gatt_db.c" prefix="gattdb_">
+  <service name="Generic Access" uuid="1800" type="primary" advertise="false">
+    <characteristic id="device_name" name="Device Name" uuid="2A00" const="false">
+      <value type="utf-8" length="10" variable_length="false">BSRelay_01</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+  </service>
+  <service id="breathsense_service" name="BreathSense Service" uuid="b5e00001-7a4b-4c6d-9e10-112233445566" type="primary" advertise="false">
+    <characteristic id="cough_event" name="Cough Event" uuid="b5e00002-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="8" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+        <notify authenticated="false" bonded="false" encrypted="false" />
+        <indicate authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+    <characteristic id="environment_data" name="Environment Data" uuid="b5e00003-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="4" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+        <notify authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+    <characteristic id="pendant_status" name="Pendant Status" uuid="b5e00005-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="6" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+    <characteristic id="ai_status" name="Ai Status" uuid="b5e00006-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="10" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+    <characteristic id="relay_status" name="Relay Status" uuid="b5e00007-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="20" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+        <notify authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+    <characteristic id="relay_source" name="Relay Source" uuid="b5e00008-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="8" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+    <!-- UTC from Pi; the relay forwards advancing time to its source. -->
+    <characteristic id="time_sync" name="Time Sync" uuid="b5e00004-7a4b-4c6d-9e10-112233445566" const="false">
+      <value type="user" length="4" variable_length="false" />
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false" />
+        <write authenticated="false" bonded="false" encrypted="false" />
+      </properties>
+    </characteristic>
+  </service>
+</gatt>

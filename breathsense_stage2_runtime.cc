@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "breathsense_ai_product_config.h"
 #include "breathsense_stage2_model_data.h"
 #include "breathsense_stage2_runtime.h"
 
@@ -26,6 +27,40 @@ constexpr float kExpectedOutputScale = 0.09463200718164444f;
 constexpr int32_t kExpectedOutputZeroPoint = -128;
 constexpr float kQuantizationTolerance = 0.000001f;
 
+/*
+ * sigmoid(margin * kExpectedOutputScale), rounded to whole percent.
+ *
+ * For a two-logit softmax, the winning-class probability depends only on the
+ * absolute logit difference. A small lookup table avoids expf() and its code
+ * size/runtime cost on the MCU. Margins above the last entry saturate at 100%.
+ * This estimate is model confidence, not a calibrated clinical probability.
+ */
+constexpr std::uint8_t kWinningProbabilityPercentByMargin[] = {
+  50u, 52u, 55u, 57u, 59u, 62u, 64u, 66u,
+  68u, 70u, 72u, 74u, 76u, 77u, 79u, 81u,
+  82u, 83u, 85u, 86u, 87u, 88u, 89u, 90u,
+  91u, 91u, 92u, 93u, 93u, 94u, 94u, 95u,
+  95u, 96u, 96u, 96u, 97u, 97u, 97u, 98u,
+  98u, 98u, 98u, 98u, 98u, 99u, 99u, 99u,
+  99u, 99u, 99u, 99u, 99u, 99u, 99u, 99u,
+  100u, 100u, 100u, 100u, 100u, 100u, 100u, 100u,
+  100u
+};
+
+constexpr std::size_t kProbabilityTableSize =
+  sizeof(kWinningProbabilityPercentByMargin)
+  / sizeof(kWinningProbabilityPercentByMargin[0]);
+
+static_assert(BS_AI_STAGE2_DRY_MAX_WET_PERCENT < 50u,
+              "Stage 2 dry threshold must be below 50 percent");
+static_assert(BS_AI_STAGE2_WET_MIN_WET_PERCENT > 50u,
+              "Stage 2 wet threshold must be above 50 percent");
+static_assert(BS_AI_STAGE2_DRY_MAX_WET_PERCENT
+                < BS_AI_STAGE2_WET_MIN_WET_PERCENT,
+              "Stage 2 decision band is invalid");
+static_assert(BS_AI_STAGE2_WET_MIN_WET_PERCENT <= 100u,
+              "Stage 2 wet threshold must not exceed 100 percent");
+
 alignas(16)
 static std::uint8_t stage2_tensor_arena[kStage2TensorArenaSize];
 
@@ -37,6 +72,17 @@ static bool stage2_initialized = false;
 static float absolute_float(float value)
 {
   return (value < 0.0f) ? -value : value;
+}
+
+static std::uint8_t winning_probability_percent(std::uint8_t margin)
+{
+  const std::size_t index = static_cast<std::size_t>(margin);
+
+  if (index >= kProbabilityTableSize) {
+    return 100u;
+  }
+
+  return kWinningProbabilityPercentByMargin[index];
 }
 
 static bool add_required_operators(
@@ -100,6 +146,8 @@ static void reset_result(breathsense_stage2_result_t *result)
   result->dry_score = 0;
   result->wet_score = 0;
   result->margin = 0u;
+  result->wet_probability_percent = 50u;
+  result->confidence_percent = 50u;
   result->decision = BREATHSENSE_STAGE2_ERROR;
   result->valid = false;
 }
@@ -238,15 +286,26 @@ extern "C" bool breathsense_stage2_runtime_run(
   result->dry_score = static_cast<int8_t>(dry);
   result->wet_score = static_cast<int8_t>(wet);
   result->margin = static_cast<uint8_t>(absolute_difference);
+
+  const std::uint8_t winning_probability =
+    winning_probability_percent(result->margin);
+
+  result->confidence_percent = winning_probability;
+  result->wet_probability_percent =
+    (wet >= dry)
+    ? winning_probability
+    : static_cast<std::uint8_t>(100u - winning_probability);
+
   result->valid = true;
 
-  if (absolute_difference
-      < static_cast<int16_t>(BREATHSENSE_STAGE2_MARGIN_THRESHOLD)) {
-    result->decision = BREATHSENSE_STAGE2_REJECTED;
-  } else if (dry > wet) {
+  if (result->wet_probability_percent
+      <= BS_AI_STAGE2_DRY_MAX_WET_PERCENT) {
     result->decision = BREATHSENSE_STAGE2_DRY;
-  } else {
+  } else if (result->wet_probability_percent
+             >= BS_AI_STAGE2_WET_MIN_WET_PERCENT) {
     result->decision = BREATHSENSE_STAGE2_WET;
+  } else {
+    result->decision = BREATHSENSE_STAGE2_REJECTED;
   }
 
   return true;

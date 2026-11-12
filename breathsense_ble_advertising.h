@@ -27,6 +27,7 @@ void breathsense_ble_advertising_set_state_changed_callback(
  * - Bluetooth stack da boot;
  * - gateway da ket noi;
  * - gateway da subscribe characteristic cough_event.
+ * - gateway da ghi Unix epoch vao characteristic time_sync cho connection nay.
  */
 bool breathsense_ble_advertising_is_ready(void);
 
@@ -39,7 +40,9 @@ bool breathsense_ble_advertising_is_ready(void);
 bool breathsense_ble_advertising_is_environment_ready(void);
 
 bool breathsense_ble_advertising_send_cough_event(
+  uint8_t flags,
   uint8_t cough_type,
+  uint32_t timestamp_s,
   uint16_t event_counter);
 
 bool breathsense_ble_advertising_send_environment(

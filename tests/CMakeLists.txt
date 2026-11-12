@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.20)
+project(BreathSenseTimeTests C)
+enable_testing()
+add_executable(node_event_time_test test_event_time.c
+  ../src/core/breathsense_time_sync.c ../src/core/breathsense_event.c)
+target_compile_features(node_event_time_test PRIVATE c_std_11)
+target_include_directories(node_event_time_test PRIVATE stubs ../src/core)
+if(MSVC)
+  target_compile_options(node_event_time_test PRIVATE /W4 /UNDEBUG)
+else()
+  target_compile_options(node_event_time_test PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+endif()
+add_test(NAME node_event_time COMMAND node_event_time_test)

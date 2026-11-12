@@ -1,0 +1,404 @@
+--- a/gateway/ble_host_modular/ble_central.py
++++ b/gateway/ble_host_modular/ble_central.py
+@@ -31,6 +31,9 @@
+ )
+ from models import ConnectionState, PendingNode
+ from payload_parser import parse_cough_payload, parse_environment_payload
++from relay_protocol import (
++    RELAY_SOURCE_UUID, RELAY_STATUS_UUID, parse_relay_source, parse_relay_status,
++)
+ from utils import (
+     bgapi_uuid_to_text,
+     normalize_address,
+@@ -372,6 +375,10 @@
+             state.environment_characteristic = event.characteristic
+             state.environment_characteristic_uuid = uuid_text
+             state.environment_characteristic_properties = properties
++        elif uuid_text.lower() == RELAY_SOURCE_UUID and properties & 0x02:
++            state.relay_source_characteristic = event.characteristic
++        elif uuid_text.lower() == RELAY_STATUS_UUID and properties & 0x10:
++            state.relay_status_characteristic = event.characteristic
+ 
+     def on_gatt_procedure_completed(self, event: Any) -> None:
+         state = self._state_for_event(event)
+@@ -391,20 +398,40 @@
+             self._finish_service_discovery(state)
+         elif state.phase == "discover_characteristics":
+             self._finish_characteristic_discovery(state)
++        elif state.phase == "read_relay_source":
++            if state.source_address is None:
++                LOG.error("[%s] Relay did not return valid source identity", state.address)
++                self.disconnect_connection(state.handle)
++            else:
++                self._enable_cough_notifications(state)
+         elif state.phase == "enable_cough_notifications":
+             self._enable_environment_notifications(state)
+         elif state.phase == "enable_environment_notifications":
+-            state.phase = "running"
+-            state.phase_deadline = 0.0
+-            LOG.info(
+-                "[%s] Notifications enabled: cough=%s environment=%s",
+-                state.address,
+-                state.cough_characteristic,
+-                state.environment_characteristic,
+-            )
++            if state.relay_status_characteristic is not None:
++                state.phase = "enable_relay_status"
++                self._set_phase_deadline(state)
++                try:
++                    self.lib.bt.gatt.set_characteristic_notification(
++                        state.handle, state.relay_status_characteristic, GATT_NOTIFICATION
++                    )
++                except bgapi.bglib.CommandFailedError as exc:
++                    LOG.error("Relay status subscription failed: 0x%04x", exc.errorcode)
++                    self.disconnect_connection(state.handle)
++            else:
++                self._finish_subscriptions(state)
++        elif state.phase == "enable_relay_status":
++            self._finish_subscriptions(state)
++
++    def _finish_subscriptions(self, state: ConnectionState) -> None:
++        state.phase = "running"
++        state.phase_deadline = 0.0
++        LOG.info("[%s] Subscriptions ready; source=%s", state.address, state.source_address or state.address)
++        if state.source_address is None:
+             self._emit_status(state, "connected")
+-            state.status_reported = True
+-            self.start_scan()
++        else:
++            self._emit_status(state, "connected" if state.relay_upstream_ready else "disconnected")
++        state.status_reported = True
++        self.start_scan()
+ 
+     def _finish_service_discovery(self, state: ConnectionState) -> None:
+         if state.target_service is None:
+@@ -420,6 +447,13 @@
+             self.disconnect_connection(state.handle)
+ 
+     def _finish_characteristic_discovery(self, state: ConnectionState) -> None:
++        if state.relay_source_characteristic is None and any(
++            other.handle != state.handle and other.source_address == state.address
++            for other in self.connections.values()
++        ):
++            LOG.error("Source %s already connected through relay", state.address)
++            self.disconnect_connection(state.handle)
++            return
+         missing: list[str] = []
+         if state.cough_characteristic is None:
+             missing.append(self.args.cough_uuid)
+@@ -429,11 +463,29 @@
+             LOG.error("[%s] Missing required notify characteristic(s): %s", state.address, ", ".join(missing))
+             self.disconnect_connection(state.handle)
+             return
++        if state.relay_source_characteristic is not None:
++            if state.relay_status_characteristic is None:
++                LOG.error("[%s] Relay lacks link status characteristic", state.address)
++                self.disconnect_connection(state.handle)
++                return
++            state.phase = "read_relay_source"
++            self._set_phase_deadline(state)
++            try:
++                self.lib.bt.gatt.read_characteristic_value(state.handle, state.relay_source_characteristic)
++            except bgapi.bglib.CommandFailedError as exc:
++                LOG.error("Relay identity read failed: 0x%04x", exc.errorcode)
++                self.disconnect_connection(state.handle)
++            return
++        self._enable_cough_notifications(state)
++
++    def _enable_cough_notifications(self, state: ConnectionState) -> None:
+         state.phase = "enable_cough_notifications"
+         self._set_phase_deadline(state)
++        # Confirm relay queue heads over ATT. Original node remains Notify-only.
++        mode = 2 if state.source_address and state.cough_characteristic_properties & 0x20 else GATT_NOTIFICATION
+         try:
+             self.lib.bt.gatt.set_characteristic_notification(
+-                state.handle, state.cough_characteristic, GATT_NOTIFICATION
++                state.handle, state.cough_characteristic, mode
+             )
+         except bgapi.bglib.CommandFailedError as exc:
+             LOG.error("[%s] Cannot enable cough notifications: 0x%04x", state.address, exc.errorcode)
+@@ -452,7 +504,7 @@
+ 
+     def _next_envelope(self, state: ConnectionState, event_name: str, received_at: str) -> dict[str, Any]:
+         self.sequence += 1
+-        return {
++        message = {
+             "schema_version": 1,
+             "message_id": str(uuid.uuid4()),
+             "session_id": self.session_id,
+@@ -460,13 +512,17 @@
+             "event": event_name,
+             "received_at": received_at,
+             "device": {
+-                "device_id": state.address,
+-                "name": state.name,
+-                "address": state.address,
+-                "address_type": state.address_type,
++                "device_id": state.source_address or state.address,
++                "name": None if state.source_address else state.name,
++                "address": state.source_address or state.address,
++                "address_type": state.source_address_type if state.source_address else state.address_type,
+                 "connection_handle": state.handle,
+             },
+         }
++        if state.source_address:
++            message["transport"] = {"type": "ble_relay", "relay_address": state.address,
++                                    "relay_name": state.name, "status": state.relay_status}
++        return message
+ 
+     def _emit_status(self, state: ConnectionState, status: str, reason: int | None = None) -> None:
+         received_at = utc_now_iso()
+@@ -482,6 +538,40 @@
+             LOG.warning("Value event for unknown connection=%s", getattr(event, "connection", None))
+             return
+         opcode = event.att_opcode
++        if event.characteristic == state.relay_source_characteristic and opcode == ATT_READ_RESPONSE:
++            try:
++                source, address_type = parse_relay_source(bytes(event.value))
++            except ValueError as exc:
++                LOG.error("[%s] %s", state.address, exc)
++                self.disconnect_connection(state.handle)
++                return
++            if any(other.handle != state.handle and (other.source_address or other.address) == source
++                   for other in self.connections.values()):
++                LOG.error("Source %s already has an active route; refusing duplicate", source)
++                self.disconnect_connection(state.handle)
++                return
++            state.source_address, state.source_address_type = source, address_type
++            LOG.info("Relay %s forwards source %s", state.address, source)
++            return
++        if event.characteristic == state.relay_status_characteristic and opcode in (
++            ATT_READ_RESPONSE, ATT_HANDLE_VALUE_NOTIFICATION, ATT_HANDLE_VALUE_INDICATION
++        ):
++            try:
++                status = parse_relay_status(bytes(event.value))
++            except ValueError as exc:
++                LOG.warning("[%s] %s", state.address, exc)
++            else:
++                previous = state.relay_upstream_ready
++                state.relay_status = status
++                state.relay_upstream_ready = status["source_ready"]
++                if state.phase == "running" and previous != state.relay_upstream_ready:
++                    self._emit_status(state, "connected" if state.relay_upstream_ready else "disconnected")
++                    state.status_reported = True
++                LOG.debug("Relay %s status=%s", state.address, status)
++                if status["dropped"]:
++                    LOG.warning("Relay %s has dropped %d events since boot", state.address, status["dropped"])
++            self._confirm_indication_if_needed(state, opcode)
++            return
+         if opcode == ATT_READ_RESPONSE:
+             LOG.debug("[%s] Read response handle=%s: %s", state.address, event.characteristic, bytes(event.value).hex())
+             return
+@@ -500,6 +590,8 @@
+                 )
+                 parsed["event_timestamp_iso"] = event_ts
+                 parsed["timestamp_source"] = timestamp_source
++                if state.source_address and timestamp_source != "node_unix_seconds":
++                    parsed["timestamp_source"] = "gateway_received_via_relay_event_time_unknown"
+             else:
+                 event_ts = received_at
+         elif event.characteristic == state.environment_characteristic:
+@@ -553,6 +645,9 @@
+         )
+         self._publish(message)
+         self._confirm_indication_if_needed(state, opcode)
++        if state.source_address and state.relay_upstream_ready is False:
++            # Replayed queued events must not mark an unreachable source online.
++            self._emit_status(state, "disconnected")
+ 
+     def _publish(self, message: dict[str, Any]) -> None:
+         print(json.dumps(message, ensure_ascii=False), flush=True)
+--- a/gateway/ble_host_modular/models.py
++++ b/gateway/ble_host_modular/models.py
+@@ -35,6 +35,13 @@
+     environment_characteristic_uuid: Optional[str] = None
+     environment_characteristic_properties: int = 0
+ 
++    relay_source_characteristic: Optional[int] = None
++    relay_status_characteristic: Optional[int] = None
++    source_address: Optional[str] = None
++    source_address_type: Optional[int] = None
++    relay_upstream_ready: Optional[bool] = None
++    relay_status: Optional[dict] = None
++
+     phase: str = "discover_service"
+     phase_deadline: float = 0.0
+     status_reported: bool = False
+--- /dev/null
++++ b/gateway/ble_host_modular/relay_protocol.py
+@@ -0,0 +1,40 @@
++"""Versioned BreathSense relay metadata; payloads from the source stay unchanged."""
++from __future__ import annotations
++
++import struct
++
++RELAY_STATUS_UUID = "-".join(["b5e00007", "7a4b", "4c6d", "9e10", "112233445566"])
++RELAY_SOURCE_UUID = "-".join(["b5e00008", "7a4b", "4c6d", "9e10", "112233445566"])
++
++
++def parse_relay_source(payload: bytes) -> tuple[str, int]:
++    if len(payload) != 8 or payload[0] != 1 or payload[1] not in range(6):
++        raise ValueError("Invalid relay source metadata")
++    address = ":".join(f"{octet:02x}" for octet in reversed(payload[2:]))
++    if address == "00:00:00:00:00:00":
++        raise ValueError("Relay source has not been selected")
++    return address, payload[1]
++
++
++def parse_relay_status(payload: bytes) -> dict:
++    if len(payload) != 20 or payload[0] != 1 or payload[1] > 3:
++        raise ValueError("Invalid relay status")
++    version, phase, flags, queued, source_rssi, gateway_rssi, rx, tx, lost, invalid = (
++        struct.unpack("<BBBBbbIIIH", payload)
++    )
++    return {
++        "version": version,
++        "phase": phase,
++        "source_ready": bool(flags & 2),
++        "gateway_connected": bool(flags & 4),
++        "confirmed_delivery": bool(flags & 8),
++        "pendant_fresh": bool(flags & 16),
++        "ai_fresh": bool(flags & 32),
++        "queued": queued,
++        "source_rssi_dbm": None if source_rssi == 127 else source_rssi,
++        "gateway_rssi_dbm": None if gateway_rssi == 127 else gateway_rssi,
++        "received": rx,
++        "delivered": tx,
++        "dropped": lost,
++        "invalid_packets": invalid,
++    }
+--- /dev/null
++++ b/tests/test_relay.py
+@@ -0,0 +1,132 @@
++"""Test bridge identity, link status and indication routing without BLE hardware."""
++import contextlib
++import io
++from pathlib import Path
++import struct
++import sys
++import types
++import unittest
++from types import SimpleNamespace
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT / "gateway" / "ble_host_modular"))
++fake = types.ModuleType("bgapi")
++fake.bglib = SimpleNamespace(CommandFailedError=type("CommandFailedError", (Exception,), {}))
++sys.modules.setdefault("bgapi", fake)
++from ble_central import BleCentral
++from models import ConnectionState
++from relay_protocol import parse_relay_source, parse_relay_status, RELAY_SOURCE_UUID, RELAY_STATUS_UUID
++
++
++class RelayTests(unittest.TestCase):
++    def setUp(self):
++        self.state = ConnectionState(1, "11:22:33:44:55:66", 0, "BSRelay_01",
++            cough_characteristic=20, cough_characteristic_properties=0x32,
++            environment_characteristic=21,
++            relay_source_characteristic=25, relay_status_characteristic=24)
++        self.central = BleCentral.__new__(BleCentral)
++        self.central.connections = {1: self.state}
++        self.central.sequence = 0
++        self.central.session_id = "test"
++        self.messages, self.commands, self.closes = [], [], []
++        self.central._publish = self.messages.append
++        self.central.disconnect_connection = self.closes.append
++        self.central.start_scan = lambda: None
++        self.central.lib = SimpleNamespace(bt=SimpleNamespace(gatt=SimpleNamespace(
++            set_characteristic_notification=lambda *args: self.commands.append(("subscribe", args)),
++            send_characteristic_confirmation=lambda *args: self.commands.append(("confirm", args)),
++            read_characteristic_value=lambda *args: self.commands.append(("read", args)),
++        )))
++
++    def identity(self):
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=25, att_opcode=0x0b,
++            value=bytes([1, 0, 6, 5, 4, 3, 2, 1])))
++
++    def status(self, ready=True):
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=24, att_opcode=0x1b,
++            value=struct.pack("<BBBBbbIIIH", 1, 3 if ready else 0,
++                              14 if ready else 12, 2, -65, -70, 10, 8, 0, 0)))
++
++    def test_uuid_matches_firmware_bytes(self):
++        import uuid
++        for number, value in [(7, RELAY_STATUS_UUID), (8, RELAY_SOURCE_UUID)]:
++            self.assertEqual(bytes([0x66,0x55,0x44,0x33,0x22,0x11,0x10,0x9e,
++                                    0x6d,0x4c,0x4b,0x7a,number,0,0xe0,0xb5]),
++                             uuid.UUID(value).bytes[::-1])
++
++    def test_identity_preserves_source_address(self):
++        self.identity()
++        envelope = self.central._next_envelope(self.state, "cough_event", "2026-11-12T00:00:00Z")
++        self.assertEqual("01:02:03:04:05:06", envelope["device"]["device_id"])
++        self.assertEqual(self.state.address, envelope["transport"]["relay_address"])
++        self.assertEqual(self.state.address, "11:22:33:44:55:66")
++
++    def test_unknown_source_rejected(self):
++        for bad in (b"", b"\x01\x00" + bytes(6), b"\x02\x00" + bytes(range(6))):
++            with self.assertRaises(ValueError): parse_relay_source(bad)
++
++    def test_read_identity_before_subscribing(self):
++        self.central._finish_characteristic_discovery(self.state)
++        self.assertEqual([("read", (1,25))], self.commands)
++        self.assertEqual("read_relay_source", self.state.phase)
++
++    def test_relay_uses_indications_original_node_uses_notifications(self):
++        self.central._enable_cough_notifications(self.state)
++        self.assertEqual(("subscribe", (1,20,1)), self.commands[-1])
++        self.identity()
++        self.central._enable_cough_notifications(self.state)
++        self.assertEqual(("subscribe", (1,20,2)), self.commands[-1])
++
++    def test_upstream_offline_is_reported_even_when_pi_connected(self):
++        self.identity(); self.state.phase = "running"
++        self.status(True); self.status(False)
++        self.assertEqual(["connected", "disconnected"], [m["status"] for m in self.messages])
++        self.assertEqual(-65, self.state.relay_status["source_rssi_dbm"])
++
++    def test_initial_status_during_subscription_is_not_lost(self):
++        self.identity(); self.state.phase = "enable_relay_status"
++        self.status(True)
++        self.assertEqual([], self.messages)
++        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
++        self.assertEqual("connected", self.messages[-1]["status"])
++
++    def test_indication_preserves_payload_and_is_confirmed(self):
++        self.identity(); self.state.relay_upstream_ready = True
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=20, att_opcode=0x1d,
++            value=struct.pack("<BBIH",0,1,0,123)))
++        self.assertEqual(123, self.messages[-1]["parsed"]["event_counter"])
++        self.assertEqual("01:02:03:04:05:06", self.messages[-1]["device"]["device_id"])
++        self.assertEqual("gateway_received_via_relay_event_time_unknown",
++                         self.messages[-1]["parsed"]["timestamp_source"])
++        self.assertEqual(("confirm",(1,)), self.commands[-1])
++
++    def test_source_timestamp_is_preserved_if_trustworthy(self):
++        from datetime import datetime, timezone
++        self.identity(); self.state.relay_upstream_ready = True
++        timestamp = int(datetime.now(timezone.utc).timestamp())
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=20, att_opcode=0x1d,
++            value=struct.pack("<BBIH",1,1,timestamp,124)))
++        self.assertEqual("node_unix_seconds", self.messages[-1]["parsed"]["timestamp_source"])
++
++    def test_queued_event_does_not_leave_offline_source_online(self):
++        self.identity(); self.state.relay_upstream_ready = False
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=20, att_opcode=0x1d,
++            value=struct.pack("<BBIH",0,1,0,125)))
++        self.assertEqual("cough_event",self.messages[0]["event"])
++        self.assertEqual("disconnected",self.messages[-1]["status"])
++
++    def test_duplicate_direct_and_relay_route_refused(self):
++        self.central.connections[2] = ConnectionState(2,"01:02:03:04:05:06",0,"MyDevice_01")
++        self.identity()
++        self.assertEqual([1],self.closes)
++
++    def test_malformed_status_rejected(self):
++        with self.assertRaises(ValueError): parse_relay_status(bytes(20))
++        with self.assertRaises(ValueError): parse_relay_status(bytes([1])*19)
++
++if __name__ == "__main__": unittest.main()

@@ -18,6 +18,7 @@
 #include "breathsense_event.h"
 #include "breathsense_sensor.h"
 #include "breathsense_telemetry.h"
+#include "breathsense_time_sync.h"
 
 void app_init(void)
 {
@@ -26,6 +27,7 @@ void app_init(void)
    */
   breathsense_event_init();
   breathsense_telemetry_init();
+  breathsense_time_sync_init();
 
   /*
    * BLE TX flag group phai san sang truoc khi AI va sensor publish du lieu.

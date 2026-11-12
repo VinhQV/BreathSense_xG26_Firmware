@@ -11,7 +11,6 @@ extern "C" {
 
 #define BREATHSENSE_STAGE2_INPUT_COUNT       2000u
 #define BREATHSENSE_STAGE2_OUTPUT_COUNT      2u
-#define BREATHSENSE_STAGE2_MARGIN_THRESHOLD  15u
 
 typedef enum {
   BREATHSENSE_STAGE2_DRY = 0,
@@ -24,6 +23,8 @@ typedef struct {
   int8_t dry_score;
   int8_t wet_score;
   uint8_t margin;
+  uint8_t wet_probability_percent;
+  uint8_t confidence_percent;
   breathsense_stage2_decision_t decision;
   bool valid;
 } breathsense_stage2_result_t;

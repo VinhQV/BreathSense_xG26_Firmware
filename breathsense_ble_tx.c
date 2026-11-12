@@ -7,7 +7,7 @@
  * - Bo nho cache giu mau nhiet do/do am moi nhat.
  * - Event flag chi dung de bao rang co viec can xu ly.
  * - BLE TX task block tai OSFlagPend() khi khong co su kien.
- * - Khong dung polling va khong dung delay dinh ky trong BLE TX task.
+ * - Retry timer chi chay khi queue con event, khong polling dinh ky.
  ******************************************************************************/
 
 #include "breathsense_ble_tx.h"
@@ -21,6 +21,7 @@
 #include "em_assert.h"
 #include "em_core.h"
 #include "os.h"
+#include "sl_sleeptimer.h"
 
 /*******************************************************************************
  ******************************* CAU HINH TASK *********************************
@@ -28,6 +29,7 @@
 
 #define BLE_TX_TASK_STACK_SIZE          384u
 #define BLE_TX_TASK_PRIORITY            26u
+#define BLE_TX_RETRY_DELAY_MS           100u
 
 /*
  * Moi bit dai dien cho mot loai cong viec.
@@ -54,6 +56,7 @@ static CPU_CHAR ble_tx_flag_group_name[] = "BreathSense BLE TX Flags";
 
 static bool ble_tx_initialized = false;
 static bool ble_tx_flag_group_ready = false;
+static sl_sleeptimer_timer_handle_t ble_tx_retry_timer;
 
 /*
  * Dem loi post flag de debug.
@@ -104,6 +107,32 @@ static void ble_tx_post_flag(OS_FLAGS flags)
     ++ble_tx_flag_post_error_count;
     CORE_EXIT_ATOMIC();
   }
+}
+
+static void ble_tx_retry_timer_callback(
+  sl_sleeptimer_timer_handle_t *timer,
+  void *data)
+{
+  (void)timer;
+  (void)data;
+
+  ble_tx_post_flag(BLE_TX_FLAG_COUGH_READY);
+}
+
+static void ble_tx_schedule_cough_retry(void)
+{
+  if (!breathsense_ble_advertising_is_ready()
+      || (breathsense_event_count() == 0u)) {
+    return;
+  }
+
+  (void)sl_sleeptimer_restart_timer_ms(
+    &ble_tx_retry_timer,
+    BLE_TX_RETRY_DELAY_MS,
+    ble_tx_retry_timer_callback,
+    NULL,
+    0u,
+    0u);
 }
 
 /*
@@ -167,44 +196,57 @@ static void ble_tx_mark_environment_sent(uint32_t sent_generation)
 static void ble_tx_process_cough_events(void)
 {
   /*
-   * Xu ly lien tuc cho den khi:
-   * - queue rong;
-   * - BLE chua san sang;
-   * - hoac lan gui hien tai bi loi.
+   * Chi gui mot event moi lan task duoc danh thuc. Stack se phat
+   * notification_tx_completed va BLE module se danh thuc task lan nua.
+   * Cach nay tranh mot vong lap blocking xa toan bo offline queue.
    */
-  while (breathsense_ble_advertising_is_ready()) {
-    breathsense_event_t event;
-
-    if (!breathsense_event_peek(&event)) {
-      return;
-    }
-
-    const bool sent =
-      breathsense_ble_advertising_send_cough_event(
-        (uint8_t)event.cough_type,
-        event.event_counter);
-
-    if (!sent) {
-      /*
-       * Khong pop event khi gui loi.
-       * Event van nam trong queue va se duoc thu lai khi co flag moi.
-       */
-      return;
-    }
-
-    if (!breathsense_event_pop()) {
-      /*
-       * Truong hop nay khong nen xay ra neu chi co mot consumer.
-       */
-      printf("BLE TX ERROR: event pop failed\r\n");
-      return;
-    }
-
-    printf("BLE EVENT SENT: counter=%u type=%u remaining=%u\r\n",
-           event.event_counter,
-           event.cough_type,
-           breathsense_event_count());
+  if (!breathsense_ble_advertising_is_ready()) {
+    return;
   }
+
+  breathsense_event_t event;
+
+  if (!breathsense_event_peek(&event)) {
+    return;
+  }
+
+  const bool sent =
+    breathsense_ble_advertising_send_cough_event(
+      event.flags,
+      (uint8_t)event.cough_type,
+      event.timestamp_s,
+      event.event_counter);
+
+  if (!sent) {
+    /*
+     * Khong pop event khi gui loi. Event van o dau queue va se duoc thu lai
+     * khi BLE state/TX resource thay doi hoac khi co event moi.
+     */
+    ble_tx_schedule_cough_retry();
+    return;
+  }
+
+  if (!breathsense_event_pop()) {
+    printf("BLE TX ERROR: event pop failed\r\n");
+    return;
+  }
+
+  const uint8_t duration_seconds =
+    (uint8_t)((event.flags & BREATHSENSE_EVENT_DURATION_MASK)
+              >> BREATHSENSE_EVENT_DURATION_SHIFT);
+
+  printf("BLE EVENT SENT: counter=%u type=%u ts=%lu ts_valid=%u "
+         "prolonged=%u duration=%us remaining=%u\r\n",
+         event.event_counter,
+         event.cough_type,
+         (unsigned long)event.timestamp_s,
+         (event.flags & BREATHSENSE_EVENT_FLAG_TIMESTAMP_VALID) != 0u,
+         (event.flags & BREATHSENSE_EVENT_FLAG_PROLONGED) != 0u,
+         duration_seconds,
+         breathsense_event_count());
+
+  /* Continue at a bounded rate instead of draining the whole queue here. */
+  ble_tx_schedule_cough_retry();
 }
 
 /*******************************************************************************

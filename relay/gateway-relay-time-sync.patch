@@ -1,0 +1,842 @@
+diff --git a/gateway/app/analytics.py b/gateway/app/analytics.py
+index 3aabb48..c3935df 100644
+--- a/gateway/app/analytics.py
++++ b/gateway/app/analytics.py
+@@ -54,11 +54,11 @@ class Analytics:
+             cough_type = event.get("cough_type", "unknown")
+             by_type[cough_type if cough_type in by_type else "unknown"] += 1
+         for event in events_24h:
+-            ts = _parse_ts(event.get("event_ts") or event.get("received_ts"))
++            ts = _parse_ts(event.get("event_ts"))
+             if ts:
+                 hourly_map[ts.strftime("%Y-%m-%dT%H:00:00%z")] += 1
+         for event in events_7d:
+-            ts = _parse_ts(event.get("event_ts") or event.get("received_ts"))
++            ts = _parse_ts(event.get("event_ts"))
+             if ts:
+                 daily_map[ts.strftime("%Y-%m-%d")] += 1
+ 
+@@ -78,7 +78,7 @@ class Analytics:
+         )
+         hourly_map: defaultdict[str, int] = defaultdict(int)
+         for event in events:
+-            ts = _parse_ts(event.get("event_ts") or event.get("received_ts"))
++            ts = _parse_ts(event.get("event_ts"))
+             if ts:
+                 hourly_map[ts.strftime("%Y-%m-%dT%H:00:00%z")] += 1
+         return [{"ts": key, "count": value} for key, value in sorted(hourly_map.items())]
+@@ -122,7 +122,7 @@ class Analytics:
+ 
+         for event in events:
+             ts = _parse_ts(
+-                event.get("event_ts") or event.get("received_ts")
++                event.get("event_ts")
+             )
+             if ts is not None:
+                 daily_map[ts.strftime("%Y-%m-%d")] += 1
+diff --git a/gateway/app/dao.py b/gateway/app/dao.py
+index 4e96181..7e59c3e 100644
+--- a/gateway/app/dao.py
++++ b/gateway/app/dao.py
+@@ -3,6 +3,7 @@
+ from __future__ import annotations
+ 
+ import sqlite3
++import re
+ import threading
+ from datetime import datetime, timedelta, timezone
+ from typing import Any
+@@ -77,9 +78,12 @@ class Dao:
+         }.items():
+             self._ensure_column("cough_events", column, declaration)
+ 
+-        # Old rows may contain NULL event_ts. New ingestion always supplies it.
++        self._allow_unknown_cough_time()
++        # Preserve the old-format fallback only for historical, unlabelled rows.
++        # Explicitly unsynchronized new events must remain NULL across restarts.
+         self._get_conn().execute(
+-            "UPDATE cough_events SET event_ts = received_ts WHERE event_ts IS NULL"
++            "UPDATE cough_events SET event_ts = received_ts WHERE event_ts IS NULL "
++            "AND (timestamp_source IS NULL OR timestamp_source != 'unknown_unsynchronized')"
+         )
+         self._get_conn().executescript(
+             """
+@@ -96,6 +100,43 @@ class Dao:
+             """
+         )
+ 
++    def _allow_unknown_cough_time(self) -> None:
++        """Remove the legacy NOT NULL constraint without losing rows/indexes."""
++        conn = self._get_conn()
++        columns = conn.execute("PRAGMA table_info(cough_events)").fetchall()
++        if not any(row["name"] == "event_ts" and row["notnull"] for row in columns):
++            return
++        original = conn.execute(
++            "SELECT sql FROM sqlite_master WHERE type='table' AND name='cough_events'"
++        ).fetchone()[0]
++        nullable = re.sub(r"\bevent_ts\s+TEXT\s+NOT\s+NULL\b", "event_ts TEXT", original,
++                          count=1, flags=re.IGNORECASE)
++        if nullable == original:
++            raise RuntimeError("Unsupported cough_events timestamp schema; migration stopped")
++        create_sql = nullable.replace("cough_events", "cough_events_time_v2", 1)
++        objects = conn.execute(
++            "SELECT sql FROM sqlite_master WHERE tbl_name='cough_events' "
++            "AND type IN ('index','trigger') AND sql IS NOT NULL"
++        ).fetchall()
++        fields = ", ".join('"' + row["name"].replace('"', '""') + '"' for row in columns)
++        sequence = conn.execute("SELECT seq FROM sqlite_sequence WHERE name='cough_events'").fetchone()
++        conn.execute("SAVEPOINT migrate_cough_time")
++        try:
++            conn.execute(create_sql)
++            conn.execute(f"INSERT INTO cough_events_time_v2 ({fields}) SELECT {fields} FROM cough_events")
++            conn.execute("DROP TABLE cough_events")
++            conn.execute("ALTER TABLE cough_events_time_v2 RENAME TO cough_events")
++            if sequence:
++                conn.execute("UPDATE sqlite_sequence SET seq=MAX(seq,?) WHERE name='cough_events'",
++                             (sequence[0],))
++            for obj in objects:
++                conn.execute(obj[0])
++            conn.execute("RELEASE SAVEPOINT migrate_cough_time")
++        except Exception:
++            conn.execute("ROLLBACK TO SAVEPOINT migrate_cough_time")
++            conn.execute("RELEASE SAVEPOINT migrate_cough_time")
++            raise
++
+     @staticmethod
+     def _rows(cursor: sqlite3.Cursor) -> list[dict[str, Any]]:
+         return [dict(row) for row in cursor.fetchall()]
+@@ -169,12 +210,12 @@ class Dao:
+         sql = "SELECT * FROM cough_events WHERE client_id = ?"
+         params: list[object] = [client_id]
+         if start_time is not None:
+-            sql += " AND received_ts >= ?"
++            sql += " AND event_ts >= ?"
+             params.append(start_time)
+         if end_time is not None:
+-            sql += " AND received_ts <= ?"
++            sql += " AND event_ts <= ?"
+             params.append(end_time)
+-        sql += " ORDER BY received_ts DESC, id DESC"
++        sql += " ORDER BY event_ts DESC, id DESC"
+         with self._lock:
+             return self._rows(self._get_conn().execute(sql, params))
+ 
+@@ -284,10 +325,10 @@ class Dao:
+     def get_hourly_counts(self, client_id: str) -> list[dict[str, Any]]:
+         start_time = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+         sql = """
+-            SELECT strftime('%Y-%m-%d %H:00:00', received_ts) AS time_bucket,
++            SELECT strftime('%Y-%m-%d %H:00:00', event_ts) AS time_bucket,
+                    cough_type, COUNT(*) AS count
+             FROM cough_events
+-            WHERE client_id = ? AND received_ts >= ?
++            WHERE client_id = ? AND event_ts >= ?
+             GROUP BY time_bucket, cough_type
+             ORDER BY time_bucket ASC
+         """
+@@ -297,10 +338,10 @@ class Dao:
+     def get_daily_counts(self, client_id: str) -> list[dict[str, Any]]:
+         start_time = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+         sql = """
+-            SELECT strftime('%Y-%m-%d', received_ts) AS time_bucket,
++            SELECT strftime('%Y-%m-%d', event_ts) AS time_bucket,
+                    cough_type, COUNT(*) AS count
+             FROM cough_events
+-            WHERE client_id = ? AND received_ts >= ?
++            WHERE client_id = ? AND event_ts >= ?
+             GROUP BY time_bucket, cough_type
+             ORDER BY time_bucket ASC
+         """
+diff --git a/gateway/app/event_processor.py b/gateway/app/event_processor.py
+index 4db77db..c629626 100644
+--- a/gateway/app/event_processor.py
++++ b/gateway/app/event_processor.py
+@@ -101,6 +101,9 @@ class EventProcessor:
+             raw.get("event_ts") or parsed.get("event_timestamp_iso"),
+             fallback=received_ts,
+         )
++        if event_name == "cough_event" and parsed.get("timestamp_valid") is False:
++            # Unknown occurrence time is not the BLE reconnect/receive time.
++            event_ts = None
+         session_id = str(raw.get("session_id") or "legacy")
+         message_id = raw.get("message_id") or self._fallback_message_id(raw)
+ 
+@@ -123,7 +126,8 @@ class EventProcessor:
+             "cough_type": raw.get("cough_type", parsed.get("cough_type_name", parsed.get("cough_type"))),
+             "counter": _safe_int(raw.get("counter", parsed.get("event_counter"))),
+             "node_event_timestamp": _safe_int(parsed.get("event_timestamp")),
+-            "timestamp_source": parsed.get("timestamp_source") or raw.get("timestamp_source") or "gateway_received",
++            "timestamp_source": ("unknown_unsynchronized" if event_ts is None else
++                                 parsed.get("timestamp_source") or raw.get("timestamp_source") or "gateway_received"),
+             "temperature_c": raw.get("temperature_c", parsed.get("temperature_c")),
+             "humidity_percent": raw.get("humidity_percent", parsed.get("humidity_percent")),
+             "temperature_x100": _safe_int(raw.get("temperature_x100", parsed.get("temperature_x100"))),
+diff --git a/gateway/app/schema.sql b/gateway/app/schema.sql
+index a270f55..3e8a51a 100644
+--- a/gateway/app/schema.sql
++++ b/gateway/app/schema.sql
+@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS cough_events (
+     device_id            TEXT NOT NULL,
+     client_id            TEXT,
+     cough_type           TEXT,
+-    event_ts             TEXT NOT NULL,
++    event_ts             TEXT,
+     received_ts          TEXT NOT NULL,
+     event_counter        INTEGER,
+     node_event_timestamp INTEGER,
+diff --git a/gateway/ble_host_modular/ble_central.py b/gateway/ble_host_modular/ble_central.py
+index de457aa..2641cd3 100644
+--- a/gateway/ble_host_modular/ble_central.py
++++ b/gateway/ble_host_modular/ble_central.py
+@@ -31,6 +31,9 @@ from constants import (
+ )
+ from models import ConnectionState, PendingNode
+ from payload_parser import parse_cough_payload, parse_environment_payload
++from relay_protocol import (
++    RELAY_SOURCE_UUID, RELAY_STATUS_UUID, TIME_SYNC_UUID, parse_relay_source, parse_relay_status,
++)
+ from utils import (
+     bgapi_uuid_to_text,
+     normalize_address,
+@@ -164,6 +167,8 @@ class BleCentral:
+             self.scan_retry_after = now + RECONNECT_DELAY_SECONDS
+ 
+         for state in list(self.connections.values()):
++            if state.phase == "running" and now >= state.next_time_sync:
++                self._synchronize_time(state)
+             if not state.phase_deadline or now < state.phase_deadline:
+                 continue
+             if state.phase == "closing":
+@@ -372,6 +377,12 @@ class BleCentral:
+             state.environment_characteristic = event.characteristic
+             state.environment_characteristic_uuid = uuid_text
+             state.environment_characteristic_properties = properties
++        elif uuid_text.lower() == RELAY_SOURCE_UUID and properties & 0x02:
++            state.relay_source_characteristic = event.characteristic
++        elif uuid_text.lower() == RELAY_STATUS_UUID and properties & 0x10:
++            state.relay_status_characteristic = event.characteristic
++        elif uuid_text.lower() == TIME_SYNC_UUID and properties & 0x0a == 0x0a:
++            state.time_sync_characteristic = event.characteristic
+ 
+     def on_gatt_procedure_completed(self, event: Any) -> None:
+         state = self._state_for_event(event)
+@@ -391,20 +402,75 @@ class BleCentral:
+             self._finish_service_discovery(state)
+         elif state.phase == "discover_characteristics":
+             self._finish_characteristic_discovery(state)
++        elif state.phase == "read_relay_source":
++            if state.source_address is None:
++                LOG.error("[%s] Relay did not return valid source identity", state.address)
++                self.disconnect_connection(state.handle)
++            else:
++                self._enable_cough_notifications(state)
+         elif state.phase == "enable_cough_notifications":
+             self._enable_environment_notifications(state)
+         elif state.phase == "enable_environment_notifications":
+-            state.phase = "running"
+-            state.phase_deadline = 0.0
+-            LOG.info(
+-                "[%s] Notifications enabled: cough=%s environment=%s",
+-                state.address,
+-                state.cough_characteristic,
+-                state.environment_characteristic,
++            if state.relay_status_characteristic is not None:
++                state.phase = "enable_relay_status"
++                self._set_phase_deadline(state)
++                try:
++                    self.lib.bt.gatt.set_characteristic_notification(
++                        state.handle, state.relay_status_characteristic, GATT_NOTIFICATION
++                    )
++                except bgapi.bglib.CommandFailedError as exc:
++                    LOG.error("Relay status subscription failed: 0x%04x", exc.errorcode)
++                    self.disconnect_connection(state.handle)
++            else:
++                self._synchronize_time(state)
++        elif state.phase == "enable_relay_status":
++            self._synchronize_time(state)
++        elif state.phase == "sync_time":
++            state.phase = "verify_time"
++            state.time_readback = None
++            self._set_phase_deadline(state)
++            try:
++                self.lib.bt.gatt.read_characteristic_value(state.handle, state.time_sync_characteristic)
++            except bgapi.bglib.CommandFailedError as exc:
++                LOG.error("Time readback failed: 0x%04x", exc.errorcode)
++                self.disconnect_connection(state.handle)
++        elif state.phase == "verify_time":
++            if state.time_readback is None or abs(state.time_readback - int(time.time())) > 5:
++                LOG.error("[%s] UTC verification failed: peer=%s", state.address, state.time_readback)
++                self.disconnect_connection(state.handle)
++                return
++            LOG.info("[%s] BLE peer UTC verified=%d (relay source ACK is separate)",
++                     state.address, state.time_readback)
++            state.next_time_sync = time.monotonic() + 3600
++            self._finish_subscriptions(state)
++
++    def _synchronize_time(self, state: ConnectionState) -> None:
++        epoch = int(time.time())
++        if state.time_sync_characteristic is None or not 1577836800 <= epoch <= 4102444799:
++            LOG.error("[%s] Time Sync missing or Pi clock unset; update firmware/set Pi UTC",
++                      state.address)
++            self.disconnect_connection(state.handle)
++            return
++        state.phase = "sync_time"
++        self._set_phase_deadline(state)
++        try:
++            self.lib.bt.gatt.write_characteristic_value(
++                state.handle, state.time_sync_characteristic, epoch.to_bytes(4, "little")
+             )
++        except bgapi.bglib.CommandFailedError as exc:
++            LOG.error("Time write failed: 0x%04x", exc.errorcode)
++            self.disconnect_connection(state.handle)
++
++    def _finish_subscriptions(self, state: ConnectionState) -> None:
++        state.phase = "running"
++        state.phase_deadline = 0.0
++        LOG.info("[%s] Subscriptions ready; source=%s", state.address, state.source_address or state.address)
++        if state.source_address is None:
+             self._emit_status(state, "connected")
+-            state.status_reported = True
+-            self.start_scan()
++        else:
++            self._emit_status(state, "connected" if state.relay_upstream_ready else "disconnected")
++        state.status_reported = True
++        self.start_scan()
+ 
+     def _finish_service_discovery(self, state: ConnectionState) -> None:
+         if state.target_service is None:
+@@ -420,20 +486,47 @@ class BleCentral:
+             self.disconnect_connection(state.handle)
+ 
+     def _finish_characteristic_discovery(self, state: ConnectionState) -> None:
++        if state.relay_source_characteristic is None and any(
++            other.handle != state.handle and other.source_address == state.address
++            for other in self.connections.values()
++        ):
++            LOG.error("Source %s already connected through relay", state.address)
++            self.disconnect_connection(state.handle)
++            return
+         missing: list[str] = []
+         if state.cough_characteristic is None:
+             missing.append(self.args.cough_uuid)
+         if state.environment_characteristic is None:
+             missing.append(self.args.environment_uuid)
++        if state.time_sync_characteristic is None:
++            missing.append(TIME_SYNC_UUID)
+         if missing:
+             LOG.error("[%s] Missing required notify characteristic(s): %s", state.address, ", ".join(missing))
+             self.disconnect_connection(state.handle)
+             return
++        if state.relay_source_characteristic is not None:
++            if state.relay_status_characteristic is None:
++                LOG.error("[%s] Relay lacks link status characteristic", state.address)
++                self.disconnect_connection(state.handle)
++                return
++            state.phase = "read_relay_source"
++            self._set_phase_deadline(state)
++            try:
++                self.lib.bt.gatt.read_characteristic_value(state.handle, state.relay_source_characteristic)
++            except bgapi.bglib.CommandFailedError as exc:
++                LOG.error("Relay identity read failed: 0x%04x", exc.errorcode)
++                self.disconnect_connection(state.handle)
++            return
++        self._enable_cough_notifications(state)
++
++    def _enable_cough_notifications(self, state: ConnectionState) -> None:
+         state.phase = "enable_cough_notifications"
+         self._set_phase_deadline(state)
++        # Confirm relay queue heads over ATT. Original node remains Notify-only.
++        mode = 2 if state.source_address and state.cough_characteristic_properties & 0x20 else GATT_NOTIFICATION
+         try:
+             self.lib.bt.gatt.set_characteristic_notification(
+-                state.handle, state.cough_characteristic, GATT_NOTIFICATION
++                state.handle, state.cough_characteristic, mode
+             )
+         except bgapi.bglib.CommandFailedError as exc:
+             LOG.error("[%s] Cannot enable cough notifications: 0x%04x", state.address, exc.errorcode)
+@@ -452,7 +545,7 @@ class BleCentral:
+ 
+     def _next_envelope(self, state: ConnectionState, event_name: str, received_at: str) -> dict[str, Any]:
+         self.sequence += 1
+-        return {
++        message = {
+             "schema_version": 1,
+             "message_id": str(uuid.uuid4()),
+             "session_id": self.session_id,
+@@ -460,13 +553,17 @@ class BleCentral:
+             "event": event_name,
+             "received_at": received_at,
+             "device": {
+-                "device_id": state.address,
+-                "name": state.name,
+-                "address": state.address,
+-                "address_type": state.address_type,
++                "device_id": state.source_address or state.address,
++                "name": None if state.source_address else state.name,
++                "address": state.source_address or state.address,
++                "address_type": state.source_address_type if state.source_address else state.address_type,
+                 "connection_handle": state.handle,
+             },
+         }
++        if state.source_address:
++            message["transport"] = {"type": "ble_relay", "relay_address": state.address,
++                                    "relay_name": state.name, "status": state.relay_status}
++        return message
+ 
+     def _emit_status(self, state: ConnectionState, status: str, reason: int | None = None) -> None:
+         received_at = utc_now_iso()
+@@ -482,6 +579,44 @@ class BleCentral:
+             LOG.warning("Value event for unknown connection=%s", getattr(event, "connection", None))
+             return
+         opcode = event.att_opcode
++        if event.characteristic == state.time_sync_characteristic and opcode == ATT_READ_RESPONSE:
++            value = bytes(event.value)
++            state.time_readback = int.from_bytes(value, "little") if len(value) == 4 else None
++            return
++        if event.characteristic == state.relay_source_characteristic and opcode == ATT_READ_RESPONSE:
++            try:
++                source, address_type = parse_relay_source(bytes(event.value))
++            except ValueError as exc:
++                LOG.error("[%s] %s", state.address, exc)
++                self.disconnect_connection(state.handle)
++                return
++            if any(other.handle != state.handle and (other.source_address or other.address) == source
++                   for other in self.connections.values()):
++                LOG.error("Source %s already has an active route; refusing duplicate", source)
++                self.disconnect_connection(state.handle)
++                return
++            state.source_address, state.source_address_type = source, address_type
++            LOG.info("Relay %s forwards source %s", state.address, source)
++            return
++        if event.characteristic == state.relay_status_characteristic and opcode in (
++            ATT_READ_RESPONSE, ATT_HANDLE_VALUE_NOTIFICATION, ATT_HANDLE_VALUE_INDICATION
++        ):
++            try:
++                status = parse_relay_status(bytes(event.value))
++            except ValueError as exc:
++                LOG.warning("[%s] %s", state.address, exc)
++            else:
++                previous = state.relay_upstream_ready
++                state.relay_status = status
++                state.relay_upstream_ready = status["source_ready"]
++                if state.phase == "running" and previous != state.relay_upstream_ready:
++                    self._emit_status(state, "connected" if state.relay_upstream_ready else "disconnected")
++                    state.status_reported = True
++                LOG.debug("Relay %s status=%s", state.address, status)
++                if status["dropped"]:
++                    LOG.warning("Relay %s has dropped %d events since boot", state.address, status["dropped"])
++            self._confirm_indication_if_needed(state, opcode)
++            return
+         if opcode == ATT_READ_RESPONSE:
+             LOG.debug("[%s] Read response handle=%s: %s", state.address, event.characteristic, bytes(event.value).hex())
+             return
+@@ -498,6 +633,9 @@ class BleCentral:
+                 event_ts, timestamp_source = resolve_event_timestamp(
+                     parsed.get("event_timestamp"), received_at
+                 )
++                if not parsed["timestamp_valid"] or timestamp_source != "node_unix_seconds":
++                    event_ts, timestamp_source = None, "unknown_unsynchronized"
++                    parsed["timestamp_valid"] = False
+                 parsed["event_timestamp_iso"] = event_ts
+                 parsed["timestamp_source"] = timestamp_source
+             else:
+@@ -553,6 +691,9 @@ class BleCentral:
+         )
+         self._publish(message)
+         self._confirm_indication_if_needed(state, opcode)
++        if state.source_address and state.relay_upstream_ready is False:
++            # Replayed queued events must not mark an unreachable source online.
++            self._emit_status(state, "disconnected")
+ 
+     def _publish(self, message: dict[str, Any]) -> None:
+         print(json.dumps(message, ensure_ascii=False), flush=True)
+diff --git a/gateway/ble_host_modular/models.py b/gateway/ble_host_modular/models.py
+index 9f64b31..bd05806 100644
+--- a/gateway/ble_host_modular/models.py
++++ b/gateway/ble_host_modular/models.py
+@@ -35,6 +35,16 @@ class ConnectionState:
+     environment_characteristic_uuid: Optional[str] = None
+     environment_characteristic_properties: int = 0
+ 
++    relay_source_characteristic: Optional[int] = None
++    relay_status_characteristic: Optional[int] = None
++    source_address: Optional[str] = None
++    source_address_type: Optional[int] = None
++    relay_upstream_ready: Optional[bool] = None
++    relay_status: Optional[dict] = None
++    time_sync_characteristic: Optional[int] = None
++    time_readback: Optional[int] = None
++    next_time_sync: float = float("inf")
++
+     phase: str = "discover_service"
+     phase_deadline: float = 0.0
+     status_reported: bool = False
+diff --git a/gateway/ble_host_modular/payload_parser.py b/gateway/ble_host_modular/payload_parser.py
+index 08f572c..2f59cb4 100644
+--- a/gateway/ble_host_modular/payload_parser.py
++++ b/gateway/ble_host_modular/payload_parser.py
+@@ -26,6 +26,7 @@ def parse_cough_payload(payload: bytes) -> Optional[dict[str, int | str]]:
+ 
+     return {
+         "flags": flags,
++        "timestamp_valid": bool(flags & 1) and 1577836800 <= event_timestamp <= 4102444799,
+         "cough_type": cough_type,
+         "cough_type_name": cough_type_name,
+         "event_timestamp": event_timestamp,
+diff --git a/tests/test_gateway_pipeline.py b/tests/test_gateway_pipeline.py
+index 6c8783e..c682702 100644
+--- a/tests/test_gateway_pipeline.py
++++ b/tests/test_gateway_pipeline.py
+@@ -353,7 +353,8 @@ class BleRoutingTest(unittest.TestCase):
+             [message["device"]["address"] for message in sent],
+         )
+         self.assertEqual([11, 12], [message["parsed"]["event_counter"] for message in sent])
+-        self.assertTrue(all(message["event_ts"] for message in sent))
++        self.assertTrue(all(message["event_ts"] is None for message in sent))
++        self.assertTrue(all(message["received_at"] for message in sent))
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/gateway/ble_host_modular/relay_protocol.py b/gateway/ble_host_modular/relay_protocol.py
+new file mode 100644
+--- /dev/null
++++ b/gateway/ble_host_modular/relay_protocol.py
+@@ -0,0 +1,43 @@
++"""Versioned BreathSense relay metadata; payloads from the source stay unchanged."""
++from __future__ import annotations
++
++import struct
++TIME_SYNC_UUID = "-".join(["b5e00004", "7a4b", "4c6d", "9e10", "112233445566"])
++
++RELAY_STATUS_UUID = "-".join(["b5e00007", "7a4b", "4c6d", "9e10", "112233445566"])
++RELAY_SOURCE_UUID = "-".join(["b5e00008", "7a4b", "4c6d", "9e10", "112233445566"])
++
++
++def parse_relay_source(payload: bytes) -> tuple[str, int]:
++    if len(payload) != 8 or payload[0] != 1 or payload[1] not in range(6):
++        raise ValueError("Invalid relay source metadata")
++    address = ":".join(f"{octet:02x}" for octet in reversed(payload[2:]))
++    if address == "00:00:00:00:00:00":
++        raise ValueError("Relay source has not been selected")
++    return address, payload[1]
++
++
++def parse_relay_status(payload: bytes) -> dict:
++    if len(payload) != 20 or payload[0] != 1 or payload[1] > 3:
++        raise ValueError("Invalid relay status")
++    version, phase, flags, queued, source_rssi, gateway_rssi, rx, tx, lost, invalid = (
++        struct.unpack("<BBBBbbIIIH", payload)
++    )
++    return {
++        "version": version,
++        "phase": phase,
++        "source_ready": bool(flags & 2),
++        "gateway_connected": bool(flags & 4),
++        "confirmed_delivery": bool(flags & 8),
++        "pendant_fresh": bool(flags & 16),
++        "ai_fresh": bool(flags & 32),
++        "relay_clock_valid": bool(flags & 64),
++        "source_clock_synced": bool(flags & 128),
++        "queued": queued,
++        "source_rssi_dbm": None if source_rssi == 127 else source_rssi,
++        "gateway_rssi_dbm": None if gateway_rssi == 127 else gateway_rssi,
++        "received": rx,
++        "delivered": tx,
++        "dropped": lost,
++        "invalid_packets": invalid,
++    }
+diff --git a/tests/test_relay.py b/tests/test_relay.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_relay.py
+@@ -0,0 +1,178 @@
++"""Test bridge identity, link status and indication routing without BLE hardware."""
++import contextlib
++import io
++from pathlib import Path
++import struct
++import sys
++import types
++import unittest
++from types import SimpleNamespace
++from unittest.mock import patch
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT / "gateway" / "ble_host_modular"))
++fake = types.ModuleType("bgapi")
++fake.bglib = SimpleNamespace(CommandFailedError=type("CommandFailedError", (Exception,), {}))
++sys.modules.setdefault("bgapi", fake)
++from ble_central import BleCentral
++from models import ConnectionState
++from relay_protocol import parse_relay_source, parse_relay_status, RELAY_SOURCE_UUID, RELAY_STATUS_UUID
++
++
++class RelayTests(unittest.TestCase):
++    def setUp(self):
++        self.state = ConnectionState(1, "11:22:33:44:55:66", 0, "BSRelay_01",
++            cough_characteristic=20, cough_characteristic_properties=0x32,
++            environment_characteristic=21,
++            relay_source_characteristic=25, relay_status_characteristic=24,
++            time_sync_characteristic=29)
++        self.central = BleCentral.__new__(BleCentral)
++        self.central.connections = {1: self.state}
++        self.central.sequence = 0
++        self.central.session_id = "test"
++        self.messages, self.commands, self.closes = [], [], []
++        self.central._publish = self.messages.append
++        self.central.disconnect_connection = self.closes.append
++        self.central.start_scan = lambda: None
++        self.central.lib = SimpleNamespace(bt=SimpleNamespace(gatt=SimpleNamespace(
++            set_characteristic_notification=lambda *args: self.commands.append(("subscribe", args)),
++            send_characteristic_confirmation=lambda *args: self.commands.append(("confirm", args)),
++            read_characteristic_value=lambda *args: self.commands.append(("read", args)),
++            write_characteristic_value=lambda *args: self.commands.append(("write", args)),
++        )))
++
++    def identity(self):
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=25, att_opcode=0x0b,
++            value=bytes([1, 0, 6, 5, 4, 3, 2, 1])))
++
++    def status(self, ready=True):
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=24, att_opcode=0x1b,
++            value=struct.pack("<BBBBbbIIIH", 1, 3 if ready else 0,
++                              14 if ready else 12, 2, -65, -70, 10, 8, 0, 0)))
++
++    def test_uuid_matches_firmware_bytes(self):
++        import uuid
++        for number, value in [(7, RELAY_STATUS_UUID), (8, RELAY_SOURCE_UUID)]:
++            self.assertEqual(bytes([0x66,0x55,0x44,0x33,0x22,0x11,0x10,0x9e,
++                                    0x6d,0x4c,0x4b,0x7a,number,0,0xe0,0xb5]),
++                             uuid.UUID(value).bytes[::-1])
++
++    def test_identity_preserves_source_address(self):
++        self.identity()
++        envelope = self.central._next_envelope(self.state, "cough_event", "2026-11-12T00:00:00Z")
++        self.assertEqual("01:02:03:04:05:06", envelope["device"]["device_id"])
++        self.assertEqual(self.state.address, envelope["transport"]["relay_address"])
++        self.assertEqual(self.state.address, "11:22:33:44:55:66")
++
++    def test_unknown_source_rejected(self):
++        for bad in (b"", b"\x01\x00" + bytes(6), b"\x02\x00" + bytes(range(6))):
++            with self.assertRaises(ValueError): parse_relay_source(bad)
++
++    def test_read_identity_before_subscribing(self):
++        self.central._finish_characteristic_discovery(self.state)
++        self.assertEqual([("read", (1,25))], self.commands)
++        self.assertEqual("read_relay_source", self.state.phase)
++
++    def test_relay_uses_indications_original_node_uses_notifications(self):
++        self.central._enable_cough_notifications(self.state)
++        self.assertEqual(("subscribe", (1,20,1)), self.commands[-1])
++        self.identity()
++        self.central._enable_cough_notifications(self.state)
++        self.assertEqual(("subscribe", (1,20,2)), self.commands[-1])
++
++    def test_upstream_offline_is_reported_even_when_pi_connected(self):
++        self.identity(); self.state.phase = "running"
++        self.status(True); self.status(False)
++        self.assertEqual(["connected", "disconnected"], [m["status"] for m in self.messages])
++        self.assertEqual(-65, self.state.relay_status["source_rssi_dbm"])
++
++    def test_initial_status_during_subscription_is_not_lost(self):
++        self.identity(); self.state.phase = "enable_relay_status"
++        self.status(True)
++        self.assertEqual([], self.messages)
++        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
++        self.assertEqual("sync_time", self.state.phase)
++        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
++        import time
++        self.central.on_gatt_characteristic_value(SimpleNamespace(connection=1,
++            characteristic=29,att_opcode=0x0b,value=int(time.time()).to_bytes(4,"little")))
++        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
++        self.assertEqual("connected", self.messages[-1]["status"])
++
++    def test_indication_preserves_payload_and_is_confirmed(self):
++        self.identity(); self.state.relay_upstream_ready = True
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=20, att_opcode=0x1d,
++            value=struct.pack("<BBIH",0,1,0,123)))
++        self.assertEqual(123, self.messages[-1]["parsed"]["event_counter"])
++        self.assertEqual("01:02:03:04:05:06", self.messages[-1]["device"]["device_id"])
++        self.assertIsNone(self.messages[-1]["event_ts"])
++        self.assertEqual("unknown_unsynchronized",
++                         self.messages[-1]["parsed"]["timestamp_source"])
++        self.assertEqual(("confirm",(1,)), self.commands[-1])
++
++    def test_source_timestamp_is_preserved_if_trustworthy(self):
++        from datetime import datetime, timezone
++        self.identity(); self.state.relay_upstream_ready = True
++        timestamp = int(datetime.now(timezone.utc).timestamp())
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=20, att_opcode=0x1d,
++            value=struct.pack("<BBIH",1,1,timestamp,124)))
++        self.assertEqual("node_unix_seconds", self.messages[-1]["parsed"]["timestamp_source"])
++
++    def test_queued_event_does_not_leave_offline_source_online(self):
++        self.identity(); self.state.relay_upstream_ready = False
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1, characteristic=20, att_opcode=0x1d,
++            value=struct.pack("<BBIH",0,1,0,125)))
++        self.assertEqual("cough_event",self.messages[0]["event"])
++        self.assertEqual("disconnected",self.messages[-1]["status"])
++
++    def test_duplicate_direct_and_relay_route_refused(self):
++        self.central.connections[2] = ConnectionState(2,"01:02:03:04:05:06",0,"MyDevice_01")
++        self.identity()
++        self.assertEqual([1],self.closes)
++
++    def test_malformed_status_rejected(self):
++        with self.assertRaises(ValueError): parse_relay_status(bytes(20))
++        with self.assertRaises(ValueError): parse_relay_status(bytes([1])*19)
++
++    def test_offline_10am_cough_received_at_1005_keeps_10am(self):
++        self.identity(); self.state.relay_upstream_ready = True
++        with patch("ble_central.utc_now_iso",return_value="2026-11-12T03:05:00.000Z"):
++            self.central.on_gatt_characteristic_value(SimpleNamespace(
++                connection=1,characteristic=20,att_opcode=0x1d,
++                value=struct.pack("<BBIH",1,1,1794452400,130)))
++        message=self.messages[-1]
++        self.assertEqual("2026-11-12T03:00:00.000Z",message["event_ts"])
++        self.assertEqual("2026-11-12T03:05:00.000Z",message["received_at"])
++
++    def test_valid_looking_epoch_without_flag_is_unknown(self):
++        self.identity(); self.state.relay_upstream_ready = True
++        self.central.on_gatt_characteristic_value(SimpleNamespace(
++            connection=1,characteristic=20,att_opcode=0x1d,
++            value=struct.pack("<BBIH",0,1,1794452400,131)))
++        self.assertIsNone(self.messages[-1]["event_ts"])
++
++    def test_bad_pi_clock_never_sent(self):
++        with patch("ble_central.time.time",return_value=1):
++            self.central._synchronize_time(self.state)
++        self.assertEqual([1],self.closes)
++        self.assertEqual([],self.commands)
++
++    def test_bad_readback_not_marked_ready(self):
++        self.state.phase="verify_time"; self.state.time_readback=1
++        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
++        self.assertEqual([1],self.closes)
++        self.assertEqual([],self.messages)
++
++    def test_new_connection_writes_current_clock_after_subscriptions(self):
++        self.state.phase="enable_relay_status"
++        with patch("ble_central.time.time",return_value=1794452700):
++            self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
++        self.assertEqual("sync_time",self.state.phase)
++        self.assertEqual(("write",(1,29,struct.pack("<I",1794452700))),self.commands[-1])
++
++if __name__ == "__main__": unittest.main()
+diff --git a/tests/test_time_sync_storage.py b/tests/test_time_sync_storage.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_time_sync_storage.py
+@@ -0,0 +1,107 @@
++"""Occurrence-time history, unknown times, and migration of a real legacy DB."""
++from pathlib import Path
++import sqlite3
++import sys
++import tempfile
++import unittest
++from datetime import datetime, timezone
++from unittest.mock import patch
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT / "gateway"))
++from app.dao import Dao
++from app.event_processor import EventProcessor
++from app.fleet import Fleet
++
++SCHEMA = ROOT / "gateway/app/schema.sql"
++
++
++class TimeStorageTests(unittest.TestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.path = Path(self.temp.name) / "history.db"
++        self.dao = Dao(str(self.path))
++        self.dao.init_db(str(SCHEMA))
++        self.processor = EventProcessor(self.dao, Fleet(self.dao))
++
++    def tearDown(self):
++        self.dao.close()
++        self.temp.cleanup()
++
++    def message(self, known=True, counter=1):
++        return dict(event="cough_event", message_id=f"time-{counter}", session_id="test",
++            device_id="aa:bb:cc:dd:ee:ff", client_id="patient",
++            received_at="2026-11-12T03:05:00.000Z",
++            event_ts="2026-11-12T03:00:00.000Z" if known else None,
++            parsed=dict(event_counter=counter, cough_type=1,
++                        timestamp_valid=known, event_timestamp=1794452400 if known else 0,
++                        timestamp_source="node_unix_seconds" if known else "unknown_unsynchronized"))
++
++    def test_cough_time_and_receive_time_are_stored_separately(self):
++        self.processor.process(self.message())
++        row = self.dao.get_recent_events()[0]
++        self.assertEqual("2026-11-12T03:00:00.000Z", row["event_ts"])
++        self.assertEqual("2026-11-12T03:05:00.000Z", row["received_ts"])
++        # Selecting 10:00 includes the delayed event; selecting 10:05 does not.
++        self.assertEqual(1, len(self.dao.get_events(client_id="patient", start_time="2026-11-12T03:00:00.000Z",
++                                                  end_time="2026-11-12T03:00:01.000Z")))
++        self.assertEqual([], self.dao.get_events(client_id="patient", start_time="2026-11-12T03:04:00.000Z",
++                                                end_time="2026-11-12T03:06:00.000Z"))
++
++    def test_unknown_time_remains_null_after_database_restart(self):
++        self.processor.process(self.message(False))
++        row = self.dao.get_recent_events()[0]
++        self.assertIsNone(row["event_ts"])
++        self.assertEqual("unknown_unsynchronized", row["timestamp_source"])
++        self.dao.close()
++        self.dao.init_db(str(SCHEMA))
++        row = self.dao.get_recent_events()[0]
++        self.assertIsNone(row["event_ts"])
++        self.assertEqual("2026-11-12T03:05:00.000Z", row["received_ts"])
++        self.assertEqual([], self.dao.get_events(client_id="patient", start_time="2026-11-12T00:00:00.000Z"))
++
++    def test_legacy_not_null_schema_migrates_with_rows_indexes_and_sequence(self):
++        self.dao.close()
++        legacy = Path(self.temp.name) / "legacy.db"
++        con = sqlite3.connect(legacy)
++        sql = SCHEMA.read_text().replace("event_ts             TEXT,", "event_ts             TEXT NOT NULL,")
++        con.executescript(sql)
++        con.execute("INSERT INTO devices(device_id) VALUES ('old')")
++        con.execute("INSERT INTO cough_events(id,device_id,event_ts,received_ts) VALUES (9,'old','old-time','receive-time')")
++        con.execute("CREATE INDEX custom_cough_index ON cough_events(event_counter)")
++        con.execute("UPDATE sqlite_sequence SET seq=99 WHERE name='cough_events'")
++        con.commit(); con.close()
++        self.dao = Dao(str(legacy))
++        self.dao.init_db(str(SCHEMA))
++        row = self.dao.get_recent_events()[0]
++        self.assertEqual(9, row["id"])
++        self.assertEqual("old-time", row["event_ts"])
++        self.assertTrue(self.dao.conn.execute(
++            "SELECT 1 FROM sqlite_master WHERE name='custom_cough_index'").fetchone())
++        self.processor = EventProcessor(self.dao, Fleet(self.dao))
++        self.processor.process(self.message(False))
++        unknown = self.dao.get_recent_events()[0]
++        # Ordering of legacy free-text dates is immaterial; inspect by message.
++        unknown = self.dao.conn.execute("SELECT * FROM cough_events WHERE message_id='time-1'").fetchone()
++        self.assertIsNone(unknown["event_ts"])
++        self.assertGreater(unknown["id"], 99)
++        self.assertEqual([], self.dao.conn.execute("PRAGMA foreign_key_check").fetchall())
++        self.dao.close()
++        self.dao.init_db(str(SCHEMA))
++        self.assertIsNone(self.dao.conn.execute(
++            "SELECT event_ts FROM cough_events WHERE message_id='time-1'").fetchone()[0])
++
++    def test_hourly_chart_uses_occurrence_hour_and_omits_unknown(self):
++        early = self.message()
++        early["event_ts"] = "2026-11-12T02:59:00.000Z"
++        early["parsed"]["event_timestamp"] = 1794452340
++        self.processor.process(early)
++        self.processor.process(self.message(False, 2))
++        with patch("app.dao.datetime") as clock:
++            clock.now.return_value = datetime(2026,11,12,4,tzinfo=timezone.utc)
++            buckets = self.dao.get_hourly_counts("patient")
++        self.assertEqual([dict(time_bucket="2026-11-12 02:00:00",cough_type="dry",count=1)], buckets)
++
++
++if __name__ == "__main__":
++    unittest.main()

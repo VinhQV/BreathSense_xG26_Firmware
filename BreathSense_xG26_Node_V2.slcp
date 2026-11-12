@@ -45,6 +45,7 @@ source:
 - path: breathsense_ble_tx.c
 - path: src/core/breathsense_event.c
 - path: src/core/breathsense_telemetry.c
+- path: src/core/breathsense_time_sync.c
 - path: src/indicator/breathsense_indicator.c
 tag:
 - hardware:device:flash:130
@@ -75,6 +76,7 @@ include:
   - path: breathsense_event.h
   - path: breathsense_protocol_config.h
   - path: breathsense_telemetry.h
+  - path: breathsense_time_sync.h
 - path: src/indicator
   file_list:
   - path: breathsense_indicator.h
@@ -222,4 +224,3 @@ sdk_extension:
 - vendor: silabs
   id: aiml
   version: 2.2.2
-

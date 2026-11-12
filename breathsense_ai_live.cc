@@ -32,6 +32,7 @@
 #include "breathsense_mfcc_runtime.h"
 #include "breathsense_stage2_logmel_runtime.h"
 #include "breathsense_stage2_runtime.h"
+#include "breathsense_time_sync.h"
 
 #include "em_assert.h"
 #include "em_core.h"
@@ -52,6 +53,9 @@
 #define LIVE_AI_CHUNK_SAMPLES           1600u
 #define LIVE_AI_WINDOW_CHUNKS           16u
 #define LIVE_AI_STRIDE_CHUNKS           8u
+#define LIVE_AI_STRIDE_DURATION_MS      \
+  ((LIVE_AI_STRIDE_CHUNKS * LIVE_AI_CHUNK_SAMPLES * 1000u) \
+   / LIVE_AI_SAMPLE_RATE_HZ)
 
 /*
  * 18 chunk = 28.800 mau PCM16 = 57.600 byte.
@@ -141,6 +145,20 @@ static bool stable_class_valid = false;
 static uint8_t candidate_class = BREATHSENSE_AI_OTHER;
 static uint8_t candidate_hits = 0u;
 
+typedef struct {
+  bool active;
+  uint32_t start_tick;
+  uint32_t last_cough_tick;
+  uint32_t start_timestamp_s;
+  bool start_timestamp_valid;
+  uint16_t confirmed_windows;
+  uint8_t maximum_stage1_confidence;
+  breathsense_cough_type_t cough_type;
+  uint8_t stage2_confidence;
+} cough_bout_state_t;
+
+static cough_bout_state_t cough_bout;
+
 /*******************************************************************************
  ***************************** HAM NOI BO *************************************
  ******************************************************************************/
@@ -211,6 +229,40 @@ static uint8_t find_top1(const float probabilities[4])
   return top1;
 }
 
+static bool should_prioritize_cough(
+  const float probabilities[4],
+  uint8_t raw_top1,
+  bool active_audio)
+{
+  if (!active_audio) {
+    return false;
+  }
+
+  /*
+   * Only override SPEECH or OTHER.
+   * Do not override SNEEZE because cough and sneeze can be acoustically similar.
+   */
+  if (raw_top1 != BREATHSENSE_AI_SPEECH
+      && raw_top1 != BREATHSENSE_AI_OTHER) {
+    return false;
+  }
+
+  const float cough_probability =
+    probabilities[BREATHSENSE_AI_COUGH];
+
+  const float winning_probability =
+    probabilities[raw_top1];
+
+  if (cough_probability
+      < BS_AI_COUGH_PRIORITY_MIN_PROBABILITY) {
+    return false;
+  }
+
+  const float probability_gap =
+    winning_probability - cough_probability;
+
+  return probability_gap <= BS_AI_COUGH_PRIORITY_MAX_GAP;
+}
 
 static uint8_t probability_to_percent(float probability)
 {
@@ -223,15 +275,6 @@ static uint8_t probability_to_percent(float probability)
   }
 
   return static_cast<uint8_t>(probability * 100.0f + 0.5f);
-}
-
-static uint32_t uptime_seconds(void)
-{
-  const uint32_t uptime_ms =
-    sl_sleeptimer_tick_to_ms(
-      sl_sleeptimer_get_tick_count());
-
-  return uptime_ms / 1000u;
 }
 
 static float minimum_probability(uint8_t class_id)
@@ -347,7 +390,6 @@ static void publish_result(uint8_t class_id,
     CORE_EXIT_ATOMIC();
   }
 }
-
 static uint8_t update_stable_class(
   const float probabilities[4],
   uint8_t raw_top1,
@@ -359,9 +401,23 @@ static uint8_t update_stable_class(
 
   *class_changed = false;
 
-  if (!active_audio
-      || proposed_probability
-         < minimum_probability(proposed_class)) {
+  const bool cough_priority =
+    should_prioritize_cough(
+      probabilities,
+      raw_top1,
+      active_audio);
+
+  /*
+   * COUGH may override SPEECH or OTHER when its probability is sufficiently
+   * high and close to the winning probability.
+   */
+  if (cough_priority) {
+    proposed_class = BREATHSENSE_AI_COUGH;
+    proposed_probability =
+      probabilities[BREATHSENSE_AI_COUGH];
+  } else if (!active_audio
+             || proposed_probability
+                < minimum_probability(proposed_class)) {
     proposed_class = BREATHSENSE_AI_OTHER;
     proposed_probability =
       probabilities[BREATHSENSE_AI_OTHER];
@@ -376,9 +432,20 @@ static uint8_t update_stable_class(
     candidate_hits = 1u;
   }
 
+  /*
+   * A strong priority cough can be confirmed in one window.
+   * A weaker priority cough still requires the normal number of hits.
+   */
+  const bool priority_cough_is_strong =
+    cough_priority
+    && proposed_probability
+       >= BS_AI_COUGH_PRIORITY_STRONG_PROBABILITY;
+
   const bool confirmed =
-    strong_single_window(proposed_class,
-                         proposed_probability)
+    priority_cough_is_strong
+    || strong_single_window(
+         proposed_class,
+         proposed_probability)
     || candidate_hits >= required_hits(proposed_class);
 
   if (confirmed
@@ -467,9 +534,18 @@ static bool snapshot_window(uint32_t end_chunk)
          < (LIVE_AI_RING_CHUNKS - LIVE_AI_WINDOW_CHUNKS);
 }
 
-static void run_stage2_and_queue_cough(
-  uint8_t stage1_confidence_percent)
+static bool classify_cough_type(
+  breathsense_cough_type_t *cough_type,
+  uint8_t *stage2_confidence_percent)
 {
+  if (cough_type == nullptr
+      || stage2_confidence_percent == nullptr) {
+    return false;
+  }
+
+  *cough_type = BREATHSENSE_COUGH_TYPE_UNKNOWN;
+  *stage2_confidence_percent = 0u;
+
   /*
    * Stage 1 Invoke da ket thuc truoc khi vao ham nay.
    * Vi vay Stage 2 co the ghi de shared_model_input an toan.
@@ -480,7 +556,7 @@ static void run_stage2_and_queue_cough(
         shared_model_input,
         BREATHSENSE_STAGE2_LOGMEL_ELEMENT_COUNT)) {
     std::printf("AI ERROR: Stage 2 Log-Mel processing\r\n");
-    return;
+    return false;
   }
 
   breathsense_stage2_result_t stage2_result;
@@ -490,56 +566,117 @@ static void run_stage2_and_queue_cough(
         BREATHSENSE_STAGE2_INPUT_COUNT,
         &stage2_result)) {
     std::printf("AI ERROR: Stage 2 inference\r\n");
-    return;
+    return false;
   }
 
   if (!stage2_result.valid) {
     std::printf("AI ERROR: Stage 2 result invalid\r\n");
-    return;
+    return false;
   }
-
-  breathsense_cough_type_t cough_type =
-    BREATHSENSE_COUGH_TYPE_UNKNOWN;
 
   switch (stage2_result.decision) {
     case BREATHSENSE_STAGE2_DRY:
-      cough_type = BREATHSENSE_COUGH_TYPE_DRY;
+      *cough_type = BREATHSENSE_COUGH_TYPE_DRY;
       break;
 
     case BREATHSENSE_STAGE2_WET:
-      cough_type = BREATHSENSE_COUGH_TYPE_WET;
+      *cough_type = BREATHSENSE_COUGH_TYPE_WET;
       break;
 
     case BREATHSENSE_STAGE2_REJECTED:
     case BREATHSENSE_STAGE2_ERROR:
     default:
-      cough_type = BREATHSENSE_COUGH_TYPE_UNKNOWN;
+      *cough_type = BREATHSENSE_COUGH_TYPE_UNKNOWN;
       break;
   }
 
-  std::printf("AI COUGH TYPE: %s dry=%d wet=%d margin=%u\r\n",
+  std::printf("AI COUGH TYPE: %s dry_raw=%d wet_raw=%d "
+              "wet_probability=%u%% confidence=%u%% margin=%u\r\n",
               stage2_name_upper(stage2_result.decision),
               static_cast<int>(stage2_result.dry_score),
               static_cast<int>(stage2_result.wet_score),
+              static_cast<unsigned int>(
+                stage2_result.wet_probability_percent),
+              static_cast<unsigned int>(stage2_result.confidence_percent),
               static_cast<unsigned int>(stage2_result.margin));
 
-  /*
-   * Stage 2 hien chi tra ve raw score va raw margin.
-   * Chua co cong thuc chuan de doi sang confidence 0..100,
-   * vi vay tam thoi giu gia tri nay bang 0.
-   */
-  const uint8_t stage2_confidence_percent = 0u;
+  *stage2_confidence_percent = stage2_result.confidence_percent;
+
+  return true;
+}
+
+static void start_cough_bout(uint8_t stage1_confidence_percent)
+{
+  std::memset(&cough_bout, 0, sizeof(cough_bout));
+
+  const uint32_t now_tick = sl_sleeptimer_get_tick_count();
+
+  cough_bout.active = true;
+  cough_bout.start_tick = now_tick;
+  cough_bout.last_cough_tick = now_tick;
+  cough_bout.start_timestamp_valid =
+    breathsense_time_sync_get_epoch(
+      &cough_bout.start_timestamp_s);
+  cough_bout.confirmed_windows = 1u;
+  cough_bout.maximum_stage1_confidence = stage1_confidence_percent;
+  cough_bout.cough_type = BREATHSENSE_COUGH_TYPE_UNKNOWN;
+  cough_bout.stage2_confidence = 0u;
+
+  (void)classify_cough_type(
+    &cough_bout.cough_type,
+    &cough_bout.stage2_confidence);
+
+  std::printf("AI COUGH BOUT START: s1=%u type=%u\r\n",
+              static_cast<unsigned int>(
+                cough_bout.maximum_stage1_confidence),
+              static_cast<unsigned int>(cough_bout.cough_type));
+}
+
+static void extend_cough_bout(uint8_t stage1_confidence_percent)
+{
+  if (!cough_bout.active) {
+    return;
+  }
+
+  cough_bout.last_cough_tick = sl_sleeptimer_get_tick_count();
+
+  if (cough_bout.confirmed_windows < UINT16_MAX) {
+    ++cough_bout.confirmed_windows;
+  }
+
+  if (stage1_confidence_percent
+      > cough_bout.maximum_stage1_confidence) {
+    cough_bout.maximum_stage1_confidence =
+      stage1_confidence_percent;
+  }
+}
+
+static void finish_and_queue_cough_bout(void)
+{
+  if (!cough_bout.active) {
+    return;
+  }
+
+  const uint32_t duration_ms =
+    sl_sleeptimer_tick_to_ms(
+      cough_bout.last_cough_tick - cough_bout.start_tick)
+    + LIVE_AI_STRIDE_DURATION_MS;
+
+  const bool prolonged =
+    duration_ms >= BS_AI_PROLONGED_COUGH_MIN_DURATION_MS;
 
   const uint16_t assigned_counter =
     breathsense_event_next_counter();
 
   const bool queued =
     breathsense_event_push_cough(
-      uptime_seconds(),
-      false,
-      cough_type,
-      stage1_confidence_percent,
-      stage2_confidence_percent);
+      cough_bout.start_timestamp_s,
+      cough_bout.start_timestamp_valid,
+      cough_bout.cough_type,
+      cough_bout.maximum_stage1_confidence,
+      cough_bout.stage2_confidence,
+      duration_ms,
+      prolonged);
 
   if (queued) {
     /*
@@ -549,11 +686,17 @@ static void run_stage2_and_queue_cough(
     breathsense_ble_notify_cough_ready();
 
     std::printf(
-      "AI EVENT QUEUED: counter=%u type=%u s1=%u s2=%u queue=%u\r\n",
+      "AI EVENT QUEUED: counter=%u type=%u ts=%lu ts_valid=%u "
+      "s1=%u s2=%u duration=%lums prolonged=%u windows=%u queue=%u\r\n",
       static_cast<unsigned int>(assigned_counter),
-      static_cast<unsigned int>(cough_type),
-      static_cast<unsigned int>(stage1_confidence_percent),
-      static_cast<unsigned int>(stage2_confidence_percent),
+      static_cast<unsigned int>(cough_bout.cough_type),
+      static_cast<unsigned long>(cough_bout.start_timestamp_s),
+      cough_bout.start_timestamp_valid ? 1u : 0u,
+      static_cast<unsigned int>(cough_bout.maximum_stage1_confidence),
+      static_cast<unsigned int>(cough_bout.stage2_confidence),
+      static_cast<unsigned long>(duration_ms),
+      prolonged ? 1u : 0u,
+      static_cast<unsigned int>(cough_bout.confirmed_windows),
       static_cast<unsigned int>(breathsense_event_count()));
   } else {
     std::printf(
@@ -561,6 +704,8 @@ static void run_stage2_and_queue_cough(
       static_cast<unsigned int>(breathsense_event_count()),
       static_cast<unsigned long>(breathsense_event_dropped_count()));
   }
+
+  std::memset(&cough_bout, 0, sizeof(cough_bout));
 }
 
 static void live_ai_task(void *arg)
@@ -572,8 +717,8 @@ static void live_ai_task(void *arg)
 
   std::printf("BreathSense AI product mode started\r\n");
 
-  status =
-    sl_board_enable_sensor(SL_BOARD_SENSOR_MICROPHONE);
+  //Cap nguon cho microphone va khoi tao microphone
+  status = sl_board_enable_sensor(SL_BOARD_SENSOR_MICROPHONE);
 
   if (status != SL_STATUS_OK) {
     std::printf("AI ERROR: microphone power 0x%08lx\r\n",
@@ -624,19 +769,28 @@ static void live_ai_task(void *arg)
     return;
   }
 
-  total_chunks_written = 0u;
-  stream_callback_error = false;
+  //Reset cac bien state/ trang thai runtime
+  total_chunks_written = 0u;      //no chunk audio nao duoc ghi vao ring buffer
+  stream_callback_error = false; //khong co loi xay ra trong microphone callback
 
   stable_class = BREATHSENSE_AI_OTHER;
   stable_class_valid = false;
   candidate_class = BREATHSENSE_AI_OTHER;
   candidate_hits = 0u;
+  std::memset(&cough_bout, 0, sizeof(cough_bout));
 
+
+  //microphone streaming 
   status =
-    sl_mic_start_streaming(microphone_stream_buffer,
+    sl_mic_start_streaming(microphone_stream_buffer,  
                            LIVE_AI_CHUNK_SAMPLES,
                            microphone_stream_callback);
-
+  //   Microphone thu 100 ms audio
+  //  driver call microphone_stream_callback()
+  //  callback save chunk vào ring buffer
+  //  callback post AUDIO_READY
+  //  live_ai_task wake up, snapshot_window(), MFCC, Stage 1 Invoke, Stage 2 Log-Mel, Stage 2 Invoke
+  
   if (status != SL_STATUS_OK) {
     std::printf("AI ERROR: streaming start 0x%08lx\r\n",
                 static_cast<unsigned long>(status));
@@ -769,21 +923,37 @@ static void live_ai_task(void *arg)
     }
 
     /*
-     * Chi tao mot event khi nhan on dinh cua Stage 1 chuyen sang COUGH.
-     * Cac cua so COUGH chong lap lien tiep khong tao event trung.
-     * Khi nhan quay ve OTHER, he thong moi cho phep tao event ho tiep theo.
+     * Mot cough bout bat dau khi nhan on dinh chuyen sang COUGH.
+     * Event chi duoc chot khi nhan on dinh roi COUGH, vi vay cac cua so
+     * COUGH lien tiep duoc gom thanh mot event duy nhat.
      */
-    const bool new_cough_event =
+    const bool new_cough_bout =
       class_changed
       && confirmed_class == BREATHSENSE_AI_COUGH;
 
-    if (new_cough_event) {
-      const uint8_t stage1_confidence_percent =
-        probability_to_percent(
-          probabilities[BREATHSENSE_AI_COUGH]);
+    const uint8_t stage1_cough_confidence =
+      probability_to_percent(
+        probabilities[BREATHSENSE_AI_COUGH]);
 
-      run_stage2_and_queue_cough(
-        stage1_confidence_percent);
+    const bool current_window_has_cough_evidence =
+      active_audio
+      && ((raw_top1 == BREATHSENSE_AI_COUGH
+           && probabilities[BREATHSENSE_AI_COUGH]
+              >= BS_AI_COUGH_MIN_PROBABILITY)
+          || should_prioritize_cough(
+               probabilities,
+               raw_top1,
+               active_audio));
+
+    if (new_cough_bout) {
+      start_cough_bout(stage1_cough_confidence);
+    } else if (cough_bout.active
+               && confirmed_class == BREATHSENSE_AI_COUGH
+               && current_window_has_cough_evidence) {
+      extend_cough_bout(stage1_cough_confidence);
+    } else if (cough_bout.active
+               && confirmed_class != BREATHSENSE_AI_COUGH) {
+      finish_and_queue_cough_bout();
     }
 
     const uint32_t processing_ms =
@@ -861,7 +1031,7 @@ extern "C" void breathsense_ai_init(void)
 
   OSTaskCreate(&live_ai_task_tcb,
                live_ai_task_name,
-               live_ai_task,
+               live_ai_task,  
                DEF_NULL,
                LIVE_AI_TASK_PRIORITY,
                &live_ai_task_stack[0],

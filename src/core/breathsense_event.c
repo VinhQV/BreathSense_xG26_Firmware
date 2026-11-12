@@ -10,6 +10,9 @@
 
 #include "em_core.h"
 
+_Static_assert(sizeof(breathsense_event_t) == 12u,
+               "Unexpected cough event RAM size");
+
 /*******************************************************************************
  ******************************* STATIC STORAGE ********************************
  ******************************************************************************/
@@ -63,7 +66,9 @@ bool breathsense_event_push_cough(
   bool timestamp_valid,
   breathsense_cough_type_t cough_type,
   uint8_t stage1_confidence,
-  uint8_t stage2_confidence)
+  uint8_t stage2_confidence,
+  uint32_t duration_ms,
+  bool prolonged)
 {
   if (!cough_type_is_valid(cough_type)) {
     return false;
@@ -78,6 +83,9 @@ bool breathsense_event_push_cough(
 
   CORE_ENTER_ATOMIC();
 
+  const uint16_t event_counter = next_event_counter;
+  ++next_event_counter;
+
   if (queue_count >= BREATHSENSE_EVENT_QUEUE_DEPTH) {
     ++dropped_event_count;
 
@@ -87,8 +95,8 @@ bool breathsense_event_push_cough(
 
   breathsense_event_t *event = &event_queue[queue_tail];
 
-  event->timestamp_s = timestamp_s;
-  event->event_counter = next_event_counter;
+  event->timestamp_s = timestamp_valid ? timestamp_s : 0u;
+  event->event_counter = event_counter;
   event->cough_type = (uint8_t)cough_type;
   event->stage1_confidence = stage1_confidence;
   event->stage2_confidence = stage2_confidence;
@@ -103,7 +111,18 @@ bool breathsense_event_push_cough(
     event->flags |= BREATHSENSE_EVENT_FLAG_STAGE2_VALID;
   }
 
-  ++next_event_counter;
+  if (prolonged) {
+    event->flags |= BREATHSENSE_EVENT_FLAG_PROLONGED;
+  }
+
+  uint32_t duration_seconds = duration_ms / 1000u;
+
+  if (duration_seconds > BREATHSENSE_EVENT_DURATION_MAX_SECONDS) {
+    duration_seconds = BREATHSENSE_EVENT_DURATION_MAX_SECONDS;
+  }
+
+  event->flags |=
+    (uint8_t)(duration_seconds << BREATHSENSE_EVENT_DURATION_SHIFT);
 
   ++queue_tail;
 

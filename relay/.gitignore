@@ -1,0 +1,13 @@
+cmake_gcc/build/
+*.slps
+*.slp
+.uceditor/
+.vscode/
+*.log
+tests/build/
+__pycache__/
+.venv/
+autogen/.slc_state/
+autogen/gen.properties
+image/
+rollback/
