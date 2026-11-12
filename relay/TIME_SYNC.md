@@ -35,7 +35,7 @@ Firmware node và relay đều cần cập nhật; gateway cũng cần gửi UTC
 ## Cập nhật Pi
 
 gateway-relay-time-sync.patch là bản vá cộng dồn trên commit
-9d83c69c41ecdbe42a0e60ab40fd54dbae188beb, thay cho patch relay cũ.
+081228e5da9071fcf3fa65c257f74ad446b9f17f, thay cho patch relay cũ.
 Không áp dụng cả hai patch lên cùng bản gốc. Nếu Pi có sửa riêng, đối chiếu
 và ghép thay đổi. Dừng bộ nhận/backend và sao lưu SQLite trước khi triển khai.
 
@@ -65,3 +65,5 @@ Không chạy hai bộ nhận tranh cùng một kết nối.
 Build ARM và kiểm thử mô phỏng đã qua trên máy. Chưa nạp bản cập nhật này
 hay xác nhận end-to-end trên hai kit và Pi. Không dùng validation.json của
 bản cũ làm bằng chứng kiểm thử phần cứng cho bản mới.
+
+Mã Pi tích hợp: [VinhQV/pybgapi-examples, nhánh codex/ble-time-sync](https://github.com/VinhQV/pybgapi-examples/tree/codex/ble-time-sync).

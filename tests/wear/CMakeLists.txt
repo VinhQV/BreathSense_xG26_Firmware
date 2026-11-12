@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.20)
+project(breathsense_wear_tests C)
+enable_testing()
+add_executable(wear_policy_test test_wear.c)
+target_include_directories(wear_policy_test PRIVATE ../../src/core)
+add_test(NAME wear_policy COMMAND wear_policy_test)
+set(SILABS_SDK_PATH "" CACHE PATH "Simplicity SDK root")
+if(SILABS_SDK_PATH)
+  add_executable(node_radio_test test_radio.c)
+  target_include_directories(node_radio_test PRIVATE stubs ../.. ../../src/core ../../autogen ../../config
+    "${SILABS_SDK_PATH}/bluetooth_le_host/inc"
+    "${SILABS_SDK_PATH}/bgapi_protocol/protocol/inc"
+    "${SILABS_SDK_PATH}/platform_common/platform/common/inc")
+  if(MSVC)
+    target_compile_options(node_radio_test PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(node_radio_test PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME node_radio_lifecycle COMMAND node_radio_test)
+endif()

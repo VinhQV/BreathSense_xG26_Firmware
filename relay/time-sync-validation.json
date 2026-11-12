@@ -1,19 +1,21 @@
 {
-  "validated_at_utc": "2026-11-12T11:24:10.290541+00:00",
+  "validated_at_utc": "2026-11-12T11:38:41.711497+00:00",
   "hardware_flashed_or_tested": false,
   "arm_builds": {
     "node": "passed",
     "relay": "passed"
   },
   "host_c_suites": 3,
-  "pi_gateway_tests_on_clean_patched_base": 32,
+  "pi_gateway_tests_on_clean_patched_base": 116,
   "direct_receiver_tests": 4,
-  "base_commit": "9d83c69c41ecdbe42a0e60ab40fd54dbae188beb",
+  "base_commit": "081228e5da9071fcf3fa65c257f74ad446b9f17f",
+  "pi_commit": "4992928f45db5ac0fb45124c70df720d45c83b17",
+  "firmware_base": "27c52a5b21f58b963e5cdfc8cb0f9510297847f2",
   "patch_check": "passed; applied files match working source",
   "sha256": {
-    "cmake_gcc/build/base/BreathSense_xG26_Node_V2.s37": "ee49a21d85f8938d2dce7723e634b9c6d549c592bac2923db18573a76d21834e",
+    "cmake_gcc/build/base/BreathSense_xG26_Node_V2.s37": "480a9a66458bef17862bbb167e6d81e6a8081fba3213a06f764b02af55988b24",
     "relay/cmake_gcc/build/base/BreathSense_Relay.s37": "072b963bba85f1629fa79f20b91af3803f3ea762f09a34785c19d6792e9d0f7c",
-    "relay/gateway-relay-time-sync.patch": "ca0ffbbefe4ac048c42a1d94c19b0faa644aa97a452af89bcd3adb1428c5626e"
+    "relay/gateway-relay-time-sync.patch": "b32dbb4215e3648a55f94c4a5aca1f815d63312f7a000160f1e84139d64c3266"
   },
   "limits": [
     "Must synchronize once after reboot before known wall-clock event times",

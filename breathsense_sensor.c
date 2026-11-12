@@ -37,6 +37,9 @@
 #include "sl_si70xx.h"
 #include "sl_sleeptimer.h"
 #include "sl_status.h"
+#include "sl_gpio.h"
+#include "sl_clock_manager.h"
+#include "em_i2c.h"
 
 /*******************************************************************************
  ******************************** CAU HINH ************************************
@@ -49,6 +52,7 @@
 #define SENSOR_SAMPLE_PERIOD_MS            5000u
 
 #define SENSOR_FLAG_STARTUP_READY          ((OS_FLAGS)1u << 0u)
+#define SENSOR_FLAG_CONTROL ((OS_FLAGS)1u << 2u)
 #define SENSOR_FLAG_SAMPLE_READY           ((OS_FLAGS)1u << 1u)
 
 /*******************************************************************************
@@ -65,6 +69,7 @@ static CPU_CHAR sensor_flag_group_name[] = "BreathSense Sensor Flags";
 static sl_sleeptimer_timer_handle_t sensor_startup_timer;
 static sl_sleeptimer_timer_handle_t sensor_sample_timer;
 
+static volatile bool sensor_paused = true;
 static bool sensor_initialized = false;
 static bool sensor_flag_group_ready = false;
 
@@ -207,127 +212,81 @@ static void sensor_measure_once(void)
  ******************************* SENSOR TASK **********************************
  ******************************************************************************/
 
+static void sensor_bus_power(bool on)
+{
+  const sl_gpio_t scl = { SL_GPIO_PORT_C, 4u }, sda = { SL_GPIO_PORT_C, 5u };
+  (void)sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_I2C1);
+  I2C_Enable(I2C1, on);
+  (void)sl_gpio_set_pin_mode(&scl, on ? SL_GPIO_MODE_WIRED_AND_PULLUP : SL_GPIO_MODE_DISABLED, on);
+  (void)sl_gpio_set_pin_mode(&sda, on ? SL_GPIO_MODE_WIRED_AND_PULLUP : SL_GPIO_MODE_DISABLED, on);
+  if (!on) { (void)sl_clock_manager_disable_bus_clock(SL_BUS_CLOCK_I2C1); }
+}
+
 static void sensor_task(void *arg)
 {
-  RTOS_ERR err;
-  sl_status_t status;
-  uint8_t device_id = 0u;
-
   (void)arg;
-
-  printf("Si7021 task started: event-driven\r\n");
-
-  status = sl_board_enable_sensor(SL_BOARD_SENSOR_RHT);
-
-  if (status != SL_STATUS_OK) {
-    printf("Si7021 power enable failed: 0x%08lX\r\n",
-           (unsigned long)status);
-    return;
-  }
-
-  /*
-   * Khoi dong one-shot timer thay cho delay block 50 ms.
-   */
-  status =
-    sl_sleeptimer_start_timer_ms(
-      &sensor_startup_timer,
-      SENSOR_STARTUP_DELAY_MS,
-      sensor_startup_timer_callback,
-      DEF_NULL,
-      0u,
-      0u);
-
-  if (status != SL_STATUS_OK) {
-    printf("Si7021 startup timer failed: 0x%08lX\r\n",
-           (unsigned long)status);
-    return;
-  }
-
-  /*
-   * Task ngu den khi startup timer post flag.
-   */
-  (void)OSFlagPend(&sensor_flag_group,
-                   SENSOR_FLAG_STARTUP_READY,
-                   0u,
-                   OS_OPT_PEND_FLAG_SET_ALL
-                   | OS_OPT_PEND_FLAG_CONSUME
-                   | OS_OPT_PEND_BLOCKING,
-                   DEF_NULL,
-                   &err);
-
-  if (RTOS_ERR_CODE_GET(err) != RTOS_ERR_NONE) {
-    printf("Si7021 startup pend failed: %ld\r\n",
-           (long)RTOS_ERR_CODE_GET(err));
-    return;
-  }
-
-  status =
-    sl_si70xx_init(sl_i2cspm_sensor,
-                   SI7021_ADDR);
-
-  if (status != SL_STATUS_OK) {
-    printf("Si7021 init failed: 0x%08lX\r\n",
-           (unsigned long)status);
-    return;
-  }
-
-  if (!sl_si70xx_present(sl_i2cspm_sensor,
-                         SI7021_ADDR,
-                         &device_id)) {
-    printf("Si7021 not found on I2C bus\r\n");
-    return;
-  }
-
-  printf("Si7021 detected, device ID=0x%02X\r\n",
-         device_id);
-
-  /*
-   * Do mot lan ngay sau khi khoi tao thanh cong.
-   */
-  sensor_measure_once();
-
-  /*
-   * Bat periodic timer.
-   * Tu day sensor task chi duoc danh thuc khi timer post SAMPLE_READY
-   * hoac khi module khac goi breathsense_sensor_trigger_now().
-   */
-  status =
-    sl_sleeptimer_start_periodic_timer_ms(
-      &sensor_sample_timer,
-      SENSOR_SAMPLE_PERIOD_MS,
-      sensor_sample_timer_callback,
-      DEF_NULL,
-      0u,
-      0u);
-
-  if (status != SL_STATUS_OK) {
-    printf("Si7021 periodic timer failed: 0x%08lX\r\n",
-           (unsigned long)status);
-    return;
-  }
-
-  while (DEF_TRUE) {
-    const OS_FLAGS flags =
-      OSFlagPend(&sensor_flag_group,
-                 SENSOR_FLAG_SAMPLE_READY,
-                 0u,
-                 OS_OPT_PEND_FLAG_SET_ANY
-                 | OS_OPT_PEND_FLAG_CONSUME
-                 | OS_OPT_PEND_BLOCKING,
-                 DEF_NULL,
-                 &err);
-
-    if (RTOS_ERR_CODE_GET(err) != RTOS_ERR_NONE) {
-      /*
-       * Khong return vi task runtime khong nen chet do loi pend tam thoi.
-       */
+  bool powered = false, ready = false;
+  sensor_bus_power(false);
+  printf("Si7021 task: standby until confirmed wear\r\n");
+  for (;;) {
+    RTOS_ERR err;
+    const OS_FLAGS pending = OSFlagPend(&sensor_flag_group,
+      SENSOR_FLAG_CONTROL | SENSOR_FLAG_SAMPLE_READY | SENSOR_FLAG_STARTUP_READY,
+      0u, OS_OPT_PEND_FLAG_SET_ANY | OS_OPT_PEND_FLAG_CONSUME | OS_OPT_PEND_BLOCKING,
+      NULL, &err);
+    if (RTOS_ERR_CODE_GET(err) != RTOS_ERR_NONE) { continue; }
+    if (sensor_paused) {
+      (void)sl_sleeptimer_stop_timer(&sensor_startup_timer);
+      (void)sl_sleeptimer_stop_timer(&sensor_sample_timer);
+      if (powered) {
+        sensor_bus_power(false);
+        (void)sl_board_disable_sensor(SL_BOARD_SENSOR_RHT);
+        sensor_publish_result(0, 0u, false);
+        printf("POWER: Si7021 off\r\n");
+      }
+      powered = ready = false;
       continue;
     }
-
-    if ((flags & SENSOR_FLAG_SAMPLE_READY) != 0u) {
+    if (!powered) {
+      if (sl_board_enable_sensor(SL_BOARD_SENSOR_RHT) != SL_STATUS_OK) { continue; }
+      sensor_bus_power(true);
+      powered = true;
+      if (sl_sleeptimer_start_timer_ms(&sensor_startup_timer, SENSOR_STARTUP_DELAY_MS,
+          sensor_startup_timer_callback, NULL, 0u, 0u) != SL_STATUS_OK) {
+        (void)sl_board_disable_sensor(SL_BOARD_SENSOR_RHT);
+        sensor_bus_power(false);
+        powered = false;
+      }
+      continue;
+    }
+    if (pending & SENSOR_FLAG_STARTUP_READY) {
+      uint8_t id = 0u;
+      ready = sl_si70xx_init(sl_i2cspm_sensor, SI7021_ADDR) == SL_STATUS_OK
+        && sl_si70xx_present(sl_i2cspm_sensor, SI7021_ADDR, &id);
+      printf("Si7021: resume %s id=0x%02x\r\n", ready ? "ready" : "failed", id);
+      if (ready) {
+        if (!sensor_paused) { sensor_measure_once(); }
+        (void)sl_sleeptimer_start_periodic_timer_ms(&sensor_sample_timer,
+          SENSOR_SAMPLE_PERIOD_MS, sensor_sample_timer_callback, NULL, 0u, 0u);
+      } else {
+        /* Retry only while active; a control signal cancels this timer on sleep. */
+        (void)sl_sleeptimer_start_timer_ms(&sensor_startup_timer, SENSOR_SAMPLE_PERIOD_MS,
+          sensor_startup_timer_callback, NULL, 0u, 0u);
+      }
+    } else if (ready && (pending & SENSOR_FLAG_SAMPLE_READY) && !sensor_paused) {
       sensor_measure_once();
     }
   }
+}
+
+void breathsense_sensor_set_paused(bool paused)
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  bool changed = sensor_paused != paused;
+  sensor_paused = paused;
+  CORE_EXIT_ATOMIC();
+  if (changed) { sensor_post_flag(SENSOR_FLAG_CONTROL); }
 }
 
 /*******************************************************************************

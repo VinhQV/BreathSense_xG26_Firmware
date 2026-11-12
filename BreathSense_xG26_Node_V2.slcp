@@ -44,6 +44,7 @@ source:
 - path: breathsense_ble_advertising.c
 - path: breathsense_ble_tx.c
 - path: src/core/breathsense_event.c
+- path: src/core/breathsense_pendant.c
 - path: src/core/breathsense_telemetry.c
 - path: src/core/breathsense_time_sync.c
 - path: src/indicator/breathsense_indicator.c
@@ -74,6 +75,8 @@ include:
 - path: src/core
   file_list:
   - path: breathsense_event.h
+  - path: breathsense_pendant.h
+  - path: breathsense_wear_policy.h
   - path: breathsense_protocol_config.h
   - path: breathsense_telemetry.h
   - path: breathsense_time_sync.h
@@ -119,13 +122,16 @@ component:
   id: bluetooth_feature_gatt_server
 - package: simplicity_sdk
   vendor: silabs
-  id: bluetooth_feature_legacy_advertiser
+  id: bluetooth_feature_extended_advertiser
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_pawr_sync
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_sync_scanner
+- package: simplicity_sdk
+  vendor: silabs
+  id: bluetooth_feature_system
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_stack
@@ -161,6 +167,12 @@ component:
 - package: simplicity_sdk
   vendor: silabs
   id: mic_i2s_driver
+- package: board_drivers
+  vendor: silabs
+  id: icm40627_driver
+- package: platform_core
+  vendor: silabs
+  id: emlib_iadc
 - package: simplicity_sdk
   vendor: silabs
   id: micriumos_kernel
@@ -196,10 +208,16 @@ define:
 - name: DEBUG_EFM
 - name: TF_LITE_STATIC_MEMORY
 configuration:
+- name: SL_BT_CONFIG_MAX_TX_POWER
+  value: '100'
+- name: SL_IOSTREAM_EUSART_VCOM_RESTRICT_ENERGY_MODE_TO_ALLOW_RECEPTION
+  value: '0'
+- name: SL_POWER_MANAGER_INIT_EMU_EM2_DEBUG_ENABLE
+  value: '0'
 - name: SL_BOARD_ENABLE_VCOM
   value: '1'
 - name: SL_BOARD_ENABLE_SENSOR_MICROPHONE
-  value: '1'
+  value: '0'
 - condition:
   - iostream_usart
   name: SL_IOSTREAM_USART_VCOM_CONVERT_BY_DEFAULT_LF_TO_CRLF

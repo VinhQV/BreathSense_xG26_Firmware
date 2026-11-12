@@ -111,7 +111,7 @@
 // <i> will select the closest value that the device supports.
 // <i> API sl_bt_system_set_tx_power() can be used to set the maximum TX power at runtime.
 // <i> API sl_bt_system_get_tx_power_setting() can be used to query the selected value.
-#define SL_BT_CONFIG_MAX_TX_POWER     (80)
+#define SL_BT_CONFIG_MAX_TX_POWER     (100)
 
 // </h> End TX Power Levels
 

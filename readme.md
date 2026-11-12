@@ -3,7 +3,7 @@
 BreathSense is an embedded acoustic monitoring prototype for the Silicon Labs
 EFR32MG26 platform.
 
-The firmware continuously captures microphone audio and runs a two-stage
+While wear is confirmed, the firmware captures microphone audio and runs a two-stage
 TensorFlow Lite for Microcontrollers pipeline:
 
 1. Stage 1 detects `COUGH`, `SNEEZE`, `SPEECH`, or `OTHER`.
@@ -19,7 +19,7 @@ through Bluetooth Low Energy GATT notifications.
 
 ## Features
 
-- Continuous 16 kHz mono microphone capture
+- 16 kHz mono capture while worn; IMU wake-on-motion standby when removed
 - TensorFlow Lite Micro inference on EFR32MG26
 - Two-stage acoustic classification
 - Configurable confidence thresholds and temporal filtering
@@ -232,6 +232,10 @@ For example, a decoded temperature value of `2811` represents `28.11 °C`.
 7. Flash the generated firmware.
 8. Open the VCOM console using `115200 8-N-1`, without flow control.
 
+The BRD2608A has two onboard I2S microphones. The checked-in CMake build
+captures the right microphone as a 16 kHz mono stream. Use the CMake
+project below in Simplicity Studio or from the command line.
+
 A successful startup should include messages similar to:
 
 ```text
@@ -241,6 +245,7 @@ Si7021 task started: event-driven
 Si7021 detected
 BLE TX task started: event-driven OSFlagPend
 Stage2 runtime ready
+MIC TEST: I2S RIGHT
 AI READY: Stage1=COUGH,OTHER,SNEEZE,SPEECH Stage2=DRY,WET
 ```
 
@@ -262,6 +267,75 @@ cmake_gcc/build/base/
 ```
 
 Available output formats include `.s37`, `.hex`, `.bin`, and `.out`.
+
+### Pendant wear sensing and supply voltage
+
+For the BRD2608A neck pendant, the ICM-40627 is sampled at 25 Hz with the
+gyroscope off. The initial rules assume the pendant hangs roughly upright
+during movement and rests flat when set on a table. They require two
+consecutive two-second windows for likely worn or unknown and four still,
+flat windows for likely off-body. A motionless wearer, a pendant under
+clothing, and a pendant moving in a bag can be ambiguous. The prototype
+pauses microphone capture and inference after four still, flat windows.
+The LED turns off while BLE, the IMU, and pending cough events remain
+available. The unknown state preserves the current capture mode. After
+an off-body pause, audio capture resumes when two consecutive windows
+confirm the likely-worn state. Inference waits for a fresh 1.6-second
+audio window.
+
+Read the **Pendant Status** characteristic
+`b5e00005-7a4b-4c6d-9e10-112233445566` over BLE. The same measurements are
+printed in the `PENDANT:` VCOM log.
+
+| Byte | Meaning |
+| --- | --- |
+| 0 | Format version, currently 1 |
+| 1 | Wear estimate: 0 unknown, 1 likely worn, 2 likely off-body |
+| 2–3 | Supply rail millivolts, unsigned little-endian. 0 means unavailable. |
+| 4 | Motion sample count over the last 50 samples. 255 means unavailable. |
+| 5 | Flat sample count over the last 50 samples. 255 means unavailable. |
+
+The ADC samples AVDD, which follows the active supply. With USB connected the
+rail is normally around 3.3 V. To check a CR2032, unplug USB, power the kit from
+the cell, and read the characteristic over BLE. Compare against a multimeter
+at the board rail. Battery percentage requires a CR2032 discharge profile
+measured under the firmware's actual load, including microphone, inference,
+and radio. A rail voltage in millivolts alone cannot identify the source.
+
+Before using the wear estimate in reporting, log at least 30 seconds each
+for flat on a table, upright on a stand, worn while sitting, worn while
+walking, worn while lying down, carried in a bag, and put on/taken off.
+Compare BLE or UART states with the labels and report false worn, false
+off-body, unknown coverage, and transition delay separately. For definitive
+wear detection add a contact sensor in the enclosure. A Hall sensor and
+magnet can track closure when the necklace clasp is mechanically designed
+for it, but a closed clasp on a table can still look closed.
+
+### AI runtime status
+
+Read AI Status at `b5e00006-7a4b-4c6d-9e10-112233445566`.
+The ten-byte format is version 1, followed by the actual capture state
+(0 starting, 1 capturing, 2 paused, 3 fault), a little-endian uint32
+count of inferred windows, and a little-endian uint32 count of quiet
+windows skipped since boot. Existing Pendant Status remains six bytes.
+
+The audio gate runs before MFCC and Stage 1, using the configured peak
+and mean-absolute thresholds. Quiet windows still advance the existing
+class confirmation logic. Their reported confidence is zero because
+inference was skipped. Compare the two window counters in a quiet room
+and during speech/cough playback to check the optimization.
+
+The wearable uses these capture transitions:
+- Initial unknown state starts with capture enabled.
+- Confirmed off-body pauses capture.
+- Unknown preserves the previous capture mode.
+- Confirmed worn resumes capture after an off-body pause.
+
+Board validation must include repeated pause/resume, quiet-to-cough,
+two coughs separated by silence, soft coughs near the gate threshold,
+BLE status reads in each state, and current measurements on battery.
+Record missed events as well as false positives. The counters measure
+software work, while battery savings require current measurements.
 
 ## Testing
 
@@ -377,3 +451,7 @@ the audio gate and validate the model again.
 
 No license has been selected yet. Add a `LICENSE` file before distributing or
 accepting external contributions.
+
+## Long Range and off-body standby
+
+Coded S=8 advertising and connections, +10 dBm maximum, task-owned sensor/radio shutdown, and EM2 with IMU wake-on-motion are implemented. See [behavior, validation, limitations and range test](docs/long_range_sleep_vi.md).

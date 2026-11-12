@@ -15,6 +15,7 @@ extern "C" {
 typedef void (*breathsense_ble_state_changed_callback_t)(void);
 
 void breathsense_ble_advertising_init(void);
+void breathsense_ble_set_paused(bool paused);
 
 /*
  * Dang ky callback de danh thuc BLE TX task.

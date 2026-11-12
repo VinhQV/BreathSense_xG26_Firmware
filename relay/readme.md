@@ -77,17 +77,17 @@ thành MAC thật, build/nạp lại. Bản hiện tại ghim MAC C0:2C:ED:90:AD
 ## Cập nhật bộ nhận BGM220/Pi
 
 Đã sửa bản local của repo `NguyenDangDoanh/pybgapi-examples` trong
-`.codex_tmp/pybgapi-examples`. Chưa triển khai lên Pi và chưa push repository.
+`.codex_tmp/pybgapi-examples`. Chưa triển khai lên Pi. Bản tích hợp mới dùng nhánh `codex/ble-time-sync` trên fork VinhQV/pybgapi-examples.
 
-`gateway-relay.patch` áp dụng trên commit
-`9d83c69c41ecdbe42a0e60ab40fd54dbae188beb`; nếu bản Pi có chỉnh sửa khác,
+`gateway-relay-time-sync.patch` áp dụng trên commit
+`081228e5da9071fcf3fa65c257f74ad446b9f17f`; nếu bản Pi có chỉnh sửa khác,
 phải kiểm tra patch trước, không ghi đè toàn bộ repository.
 
 Chép patch tới Pi, tại thư mục repo:
 
 ```bash
-git apply --check /path/to/gateway-relay.patch
-git apply /path/to/gateway-relay.patch
+git apply --check /path/to/gateway-relay-time-sync.patch
+git apply /path/to/gateway-relay-time-sync.patch
 python -m unittest discover -s tests -v
 ```
 
@@ -190,3 +190,5 @@ python relay/tools/inspect_relay.py --seconds 30
 ## Long Range v2
 
 Relay scans 1M+Coded and pins source C0:2C:ED:90:AD:BA. Source link prefers Coded S=8 (PHY=4); gateway stays 1M. Both kits confirm +10 dBm maximum. Source deliberately disconnects on off-body sleep; relay retains queued events and waits for reconnect. See [power and range guide](../docs/long_range_sleep_vi.md).
+
+Mã Pi tích hợp: [VinhQV/pybgapi-examples, nhánh codex/ble-time-sync](https://github.com/VinhQV/pybgapi-examples/tree/codex/ble-time-sync).

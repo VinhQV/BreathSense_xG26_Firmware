@@ -117,6 +117,11 @@ if(BS_SLC_SOURCES
             NAME
         )
 
+        # Use the BRD2608A right microphone in the mono capture path.
+        if(BS_SOURCE_NAME STREQUAL "sl_mic_i2s.c")
+            set(BS_SOURCE "${BS_ROOT}/sl_mic_i2s_right_diagnostic.c")
+        endif()
+
         set(BS_REMOVE_SOURCE FALSE)
 
         if(BS_SOURCE_NAME STREQUAL "sl_tflite_micro_init.cc"
@@ -216,6 +221,12 @@ bs_add_source_if_missing(slc "${BS_ROOT}/breathsense_stage2_logmel_coefficients.
 bs_add_source_if_missing(slc "${BS_ROOT}/breathsense_stage2_logmel_runtime.cc")
 
 bs_add_source_if_missing(slc "${BS_CORE}/breathsense_event.c")
+bs_add_source_if_missing(slc "${BS_CORE}/breathsense_pendant.c")
+bs_add_source_if_missing(slc "${SDK_PATH}/board_drivers/hardware/driver/icm40627/src/sl_icm40627.c")
+bs_add_source_if_missing(slc "${SDK_PATH}/platform_core/platform/emlib/src/em_iadc.c")
+target_include_directories(slc PRIVATE
+    "${SDK_PATH}/board_drivers/hardware/driver/icm40627/inc"
+)
 bs_add_source_if_missing(slc "${BS_CORE}/breathsense_telemetry.c")
 
 bs_add_source_if_missing(slc "${BS_ROOT}/breathsense_sensor.c")

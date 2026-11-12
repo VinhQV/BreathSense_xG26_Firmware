@@ -20,6 +20,8 @@
 #include <string.h>
 
 #include "em_core.h"
+#include "breathsense_ai.h"
+#include "breathsense_pendant.h"
 #include "gatt_db.h"
 #include "sl_bluetooth.h"
 #include "sl_status.h"
@@ -53,6 +55,9 @@ static uint8_t advertising_set_handle = BREATHSENSE_INVALID_HANDLE;
 static uint8_t connection_handle = BREATHSENSE_INVALID_HANDLE;
 
 static bool bluetooth_booted = false;
+static volatile bool radio_paused = true;
+static bool advertising_active = false;
+#define RADIO_CONTROL_SIGNAL (1u << 8)
 static bool connected = false;
 static bool cough_notification_enabled = false;
 static bool environment_notification_enabled = false;
@@ -109,6 +114,7 @@ static sl_status_t start_connectable_advertising(void)
 {
   sl_status_t status;
 
+  if (radio_paused || connected || advertising_active) { return SL_STATUS_OK; }
   if (!bluetooth_booted) {
     return SL_STATUS_NOT_INITIALIZED;
   }
@@ -136,8 +142,12 @@ static sl_status_t start_connectable_advertising(void)
     return status;
   }
 
+  status = sl_bt_extended_advertiser_set_phy(advertising_set_handle,
+                                             sl_bt_gap_phy_coded, sl_bt_gap_phy_coded);
+  if (status != SL_STATUS_OK) { print_status_error("coded advertising PHY", status); return status; }
+
   status =
-    sl_bt_legacy_advertiser_generate_data(
+    sl_bt_extended_advertiser_generate_data(
       advertising_set_handle,
       sl_bt_advertiser_general_discoverable);
 
@@ -147,17 +157,18 @@ static sl_status_t start_connectable_advertising(void)
   }
 
   status =
-    sl_bt_legacy_advertiser_start(
+    sl_bt_extended_advertiser_start(
       advertising_set_handle,
-      sl_bt_legacy_advertiser_connectable);
+      sl_bt_extended_advertiser_connectable, 0u);
 
   if (status != SL_STATUS_OK) {
     print_status_error("start connectable advertising", status);
     return status;
   }
 
+  advertising_active = true;
   printf("BLE: connectable advertising started, set=%u, "
-         "name=MyDevice_01\r\n",
+         "name=MyDevice_01 PHY=Coded-S8\r\n",
          advertising_set_handle);
 
   return SL_STATUS_OK;
@@ -254,6 +265,7 @@ static bool copy_connection_handle(uint8_t *handle)
 
     valid =
       bluetooth_booted
+      && !radio_paused
       && connected
       && (connection_handle != BREATHSENSE_INVALID_HANDLE);
 
@@ -312,6 +324,17 @@ static bool write_and_notify(uint16_t characteristic,
  ***************************** GIAO DIEN CONG KHAI ******************************
  ******************************************************************************/
 
+void breathsense_ble_set_paused(bool paused)
+{
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  bool changed = radio_paused != paused;
+  radio_paused = paused;
+  bool ready = bluetooth_booted;
+  CORE_EXIT_ATOMIC();
+  if (changed && ready) { (void)sl_bt_external_signal(RADIO_CONTROL_SIGNAL); }
+}
+
 void breathsense_ble_advertising_init(void)
 {
   advertising_set_handle = BREATHSENSE_INVALID_HANDLE;
@@ -355,6 +378,7 @@ bool breathsense_ble_advertising_is_ready(void)
 
     ready =
       bluetooth_booted
+      && !radio_paused
       && connected
       && cough_notification_enabled
       && time_synchronized_for_connection
@@ -377,6 +401,7 @@ bool breathsense_ble_advertising_is_environment_ready(void)
 
     ready =
       bluetooth_booted
+      && !radio_paused
       && connected
       && environment_notification_enabled
       && (connection_handle != BREATHSENSE_INVALID_HANDLE);
@@ -548,6 +573,38 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
   sl_status_t status;
 
   switch (SL_BT_MSG_ID(evt->header)) {
+    case sl_bt_evt_gatt_server_user_read_request_id: {
+      const sl_bt_evt_gatt_server_user_read_request_t *request =
+        &evt->data.evt_gatt_server_user_read_request;
+      if (request->characteristic == gattdb_pendant_status
+          || request->characteristic == gattdb_ai_status
+          || request->characteristic == gattdb_time_sync) {
+        uint8_t value[BREATHSENSE_AI_STATUS_SIZE];
+        const uint16_t offset = request->offset;
+        uint16_t size = BREATHSENSE_PENDANT_STATUS_SIZE;
+        if (request->characteristic == gattdb_time_sync) {
+          uint32_t epoch_s = 0u;
+          (void)breathsense_time_sync_get_epoch(&epoch_s);
+          encode_uint32_le(value, epoch_s);
+          size = 4u;
+        } else if (request->characteristic == gattdb_ai_status) {
+          breathsense_ai_status(value);
+          size = BREATHSENSE_AI_STATUS_SIZE;
+        } else {
+          breathsense_pendant_status(value);
+        }
+        if (offset > size) {
+          (void)sl_bt_gatt_server_send_user_read_response(
+            request->connection, request->characteristic, 0x07u, 0u, NULL, NULL);
+        } else {
+          (void)sl_bt_gatt_server_send_user_read_response(
+            request->connection, request->characteristic, 0u,
+            size - offset, &value[offset], NULL);
+        }
+      }
+      break;
+    }
+
     case sl_bt_evt_system_boot_id:
       advertising_set_handle = BREATHSENSE_INVALID_HANDLE;
       connection_handle = BREATHSENSE_INVALID_HANDLE;
@@ -558,7 +615,11 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       environment_notification_enabled = false;
       time_synchronized_for_connection = false;
 
-      printf("BLE: stack booted\r\n");
+      printf("BLE: stack booted LR-v2\r\n");
+      int16_t minimum_tx = 0, maximum_tx = 0;
+      status = sl_bt_system_set_tx_power(-100, 100, &minimum_tx, &maximum_tx);
+      printf("BLE: TX limit=%d/10 dBm status=0x%lx\r\n", maximum_tx, (unsigned long)status);
+      (void)sl_bt_connection_set_default_preferred_phy(4u, 5u);
 
       status = start_connectable_advertising();
 
@@ -574,6 +635,8 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
         evt->data.evt_connection_opened.connection;
 
       connected = true;
+      advertising_active = false;
+      if (radio_paused) { (void)sl_bt_connection_close(connection_handle); }
       cough_notification_enabled = false;
       environment_notification_enabled = false;
       time_synchronized_for_connection = false;
@@ -582,6 +645,29 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
              connection_handle);
 
       notify_state_changed();
+      break;
+
+    case sl_bt_evt_system_external_signal_id:
+      if (evt->data.evt_system_external_signal.extsignals & RADIO_CONTROL_SIGNAL) {
+        if (radio_paused) {
+          if (advertising_active) {
+            status = sl_bt_advertiser_stop(advertising_set_handle);
+            if (status == SL_STATUS_OK) { advertising_active = false; }
+            else { print_status_error("stop advertising", status); }
+          }
+          if (connected) { (void)sl_bt_connection_close(connection_handle); }
+          printf("POWER: BLE standby requested (no advertising)\r\n");
+        } else {
+          status = start_connectable_advertising();
+          if (status != SL_STATUS_OK) { print_status_error("wear advertising", status); }
+        }
+        notify_state_changed();
+      }
+      break;
+
+    case sl_bt_evt_connection_phy_status_id:
+      printf("BLE: active PHY=%u (4=Coded-S8, 8=Coded-S2, 1=1M)\r\n",
+             evt->data.evt_connection_phy_status.phy);
       break;
 
     case sl_bt_evt_gatt_server_characteristic_status_id:
@@ -682,37 +768,6 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
          * Offline cough events keep their original immutable timestamps.
          */
         notify_state_changed();
-      }
-
-      break;
-    }
-
-    case sl_bt_evt_gatt_server_user_read_request_id:
-    {
-      const sl_bt_evt_gatt_server_user_read_request_t *request =
-        &evt->data.evt_gatt_server_user_read_request;
-
-      if (request->characteristic != gattdb_time_sync) {
-        break;
-      }
-
-      uint32_t epoch_s = 0u;
-      uint8_t value[4];
-      uint16_t sent_length = 0u;
-
-      (void)breathsense_time_sync_get_epoch(&epoch_s);
-      encode_uint32_le(value, epoch_s);
-
-      status = sl_bt_gatt_server_send_user_read_response(
-        request->connection,
-        request->characteristic,
-        0u,
-        sizeof(value),
-        value,
-        &sent_length);
-
-      if (status != SL_STATUS_OK) {
-        print_status_error("send time read response", status);
       }
 
       break;

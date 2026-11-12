@@ -15,6 +15,8 @@
 #include "breathsense_indicator.h"
 
 #include "sl_led.h"
+#include "em_timer.h"
+#include "sl_clock_manager.h"
 #include "sl_simple_rgb_pwm_led_instances.h"
 
 /* PWM level range is 0..65535. 8192 is about 12.5%. */
@@ -25,7 +27,10 @@ static breathsense_ai_class_t displayed_class = BREATHSENSE_AI_OTHER;
 
 static void rgb_led_off(void)
 {
+  (void)sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_TIMER1);
   sl_led_turn_off((sl_led_t *)&sl_simple_rgb_pwm_led_rgb_led0);
+  TIMER_Enable(TIMER1, false);
+  (void)sl_clock_manager_disable_bus_clock(SL_BUS_CLOCK_TIMER1);
 }
 
 static void rgb_led_set(uint16_t red,
@@ -34,6 +39,8 @@ static void rgb_led_set(uint16_t red,
 {
   rgb_led_off();
 
+  (void)sl_clock_manager_enable_bus_clock(SL_BUS_CLOCK_TIMER1);
+  TIMER_Enable(TIMER1, true);
   sl_led_set_rgb_color(&sl_simple_rgb_pwm_led_rgb_led0,
                        red,
                        green,

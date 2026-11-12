@@ -1,41 +1,63 @@
-diff --git a/gateway/app/analytics.py b/gateway/app/analytics.py
-index 3aabb48..c3935df 100644
---- a/gateway/app/analytics.py
-+++ b/gateway/app/analytics.py
-@@ -54,11 +54,11 @@ class Analytics:
-             cough_type = event.get("cough_type", "unknown")
-             by_type[cough_type if cough_type in by_type else "unknown"] += 1
-         for event in events_24h:
--            ts = _parse_ts(event.get("event_ts") or event.get("received_ts"))
-+            ts = _parse_ts(event.get("event_ts"))
-             if ts:
-                 hourly_map[ts.strftime("%Y-%m-%dT%H:00:00%z")] += 1
-         for event in events_7d:
--            ts = _parse_ts(event.get("event_ts") or event.get("received_ts"))
-+            ts = _parse_ts(event.get("event_ts"))
-             if ts:
-                 daily_map[ts.strftime("%Y-%m-%d")] += 1
- 
-@@ -78,7 +78,7 @@ class Analytics:
-         )
-         hourly_map: defaultdict[str, int] = defaultdict(int)
-         for event in events:
--            ts = _parse_ts(event.get("event_ts") or event.get("received_ts"))
-+            ts = _parse_ts(event.get("event_ts"))
-             if ts:
-                 hourly_map[ts.strftime("%Y-%m-%dT%H:00:00%z")] += 1
-         return [{"ts": key, "count": value} for key, value in sorted(hourly_map.items())]
-@@ -122,7 +122,7 @@ class Analytics:
- 
-         for event in events:
-             ts = _parse_ts(
--                event.get("event_ts") or event.get("received_ts")
-+                event.get("event_ts")
-             )
-             if ts is not None:
-                 daily_map[ts.strftime("%Y-%m-%d")] += 1
+diff --git a/gateway/TIME_SYNC.md b/gateway/TIME_SYNC.md
+new file mode 100644
+index 0000000..a30e64a
+--- /dev/null
++++ b/gateway/TIME_SYNC.md
+@@ -0,0 +1,52 @@
++# BreathSense: giờ ho khác giờ nhận
++
++Bản này ghép cập nhật đồng bộ node/relay với các tính năng dashboard,
++phục hồi BGM220 và hàng đợi lưu bền hiện có trên master 081228e.
++
++## Pi cần làm gì?
++
++1. Đồng hồ hệ thống Pi phải đúng (nên bật NTP). Gửi UTC, không cộng thêm UTC+7.
++2. Bộ nhận BLE đăng ký nhận dữ liệu rồi ghi Unix seconds 4 byte little-endian
++   vào Time Sync (UUID tiền tố b5e00004). Với peer hỗ trợ Read, đọc lại và kiểm
++   tra độ lệch tối đa 5 giây. Đồng bộ khi kết nối, mỗi giờ và khi sang ngày UTC.
++3. Nếu đi qua BSRelay_01, Pi nhận diện MAC nguồn qua relay_source, dùng
++   indication cho sự kiện ho và theo dõi trạng thái cả hai chặng.
++4. event_ts là giờ bắt đầu cơn ho; received_ts là giờ Pi nhận. Ví dụ ho lúc
++   10:00, gửi bù lúc 10:05: lịch sử và biểu đồ vẫn ghi giờ ho 10:00.
++5. Timestamp chưa đồng bộ được lưu NULL và không lấy giờ nhận thay thế.
++   Dashboard hiển thị dấu “—”; payload upload cũng giữ timestamp=NULL.
++   Server nhận upload cần chấp nhận thời gian chưa xác định cho sự kiện này.
++
++## Lấy mã
++
++Nhánh này được đăng trên fork VinhQV vì tài khoản đó không có quyền push repo
++NguyenDangDoanh. Repository gốc vẫn được giữ làm origin.
++
++    git remote add vinhqv https://github.com/VinhQV/pybgapi-examples.git
++    git fetch vinhqv
++    git switch --track vinhqv/codex/ble-time-sync
++
++Nếu đã có remote/nhánh cùng tên, dùng lại chúng. Giữ các sửa đổi riêng trên Pi
++và kiểm tra diff trước khi ghép. Không cần áp dụng patch nữa nếu đã lấy nhánh này.
++
++Trước khi triển khai, dừng dịch vụ ghi dữ liệu và sao lưu SQLite. Migration
++cho phép event_ts=NULL, giữ dữ liệu, chỉ mục và bộ đếm ID cũ. Chạy kiểm thử:
++
++    python -m unittest discover -s tests -v
++
++Sau đó khởi động lại backend/dashboard và bộ nhận BLE bằng cấu hình đang dùng.
++Đây là hướng dẫn triển khai; chưa cài bản này lên Pi thực tế.
++
++## Kiểm tra hai chặng
++
++Node và relay cần firmware có Time Sync. Chờ log node “BLE: time synchronized”,
++relay “source time synchronized”; status relay bit6 có UTC, bit7 node đã ACK.
++Đọc lại Time Sync trên relay chỉ xác minh đồng hồ relay, không thay cho bit7.
++
++Giữ nguồn node, ngắt BLE, tạo cơn ho, đợi 5 phút rồi nối lại. Đối chiếu giờ ho
++với event_ts, giờ nhận với received_ts. Thử cả mất chặng node–relay và Pi–relay.
++Sau reset/mất nguồn, node cần đồng bộ ít nhất một lần; cơn ho trước đó chưa
++xác định được giờ tuyệt đối. RAM node/relay có giới hạn 64 sự kiện mỗi nơi.
++
++Các kiểm thử trên máy đã qua; chưa xác nhận độ lệch đồng hồ và luồng end-to-end
++trên kit/Pi. Dữ liệu cũ chỉ có giờ nhận không thể tự phục hồi giờ ho.
 diff --git a/gateway/app/dao.py b/gateway/app/dao.py
-index 4e96181..7e59c3e 100644
+index 1ffcba6..a8a29d0 100644
 --- a/gateway/app/dao.py
 +++ b/gateway/app/dao.py
 @@ -3,6 +3,7 @@
@@ -46,7 +68,7 @@ index 4e96181..7e59c3e 100644
  import threading
  from datetime import datetime, timedelta, timezone
  from typing import Any
-@@ -77,9 +78,12 @@ class Dao:
+@@ -82,9 +83,12 @@ class Dao:
          }.items():
              self._ensure_column("cough_events", column, declaration)
  
@@ -61,7 +83,7 @@ index 4e96181..7e59c3e 100644
          )
          self._get_conn().executescript(
              """
-@@ -96,6 +100,43 @@ class Dao:
+@@ -103,6 +107,43 @@ class Dao:
              """
          )
  
@@ -105,53 +127,11 @@ index 4e96181..7e59c3e 100644
      @staticmethod
      def _rows(cursor: sqlite3.Cursor) -> list[dict[str, Any]]:
          return [dict(row) for row in cursor.fetchall()]
-@@ -169,12 +210,12 @@ class Dao:
-         sql = "SELECT * FROM cough_events WHERE client_id = ?"
-         params: list[object] = [client_id]
-         if start_time is not None:
--            sql += " AND received_ts >= ?"
-+            sql += " AND event_ts >= ?"
-             params.append(start_time)
-         if end_time is not None:
--            sql += " AND received_ts <= ?"
-+            sql += " AND event_ts <= ?"
-             params.append(end_time)
--        sql += " ORDER BY received_ts DESC, id DESC"
-+        sql += " ORDER BY event_ts DESC, id DESC"
-         with self._lock:
-             return self._rows(self._get_conn().execute(sql, params))
- 
-@@ -284,10 +325,10 @@ class Dao:
-     def get_hourly_counts(self, client_id: str) -> list[dict[str, Any]]:
-         start_time = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-         sql = """
--            SELECT strftime('%Y-%m-%d %H:00:00', received_ts) AS time_bucket,
-+            SELECT strftime('%Y-%m-%d %H:00:00', event_ts) AS time_bucket,
-                    cough_type, COUNT(*) AS count
-             FROM cough_events
--            WHERE client_id = ? AND received_ts >= ?
-+            WHERE client_id = ? AND event_ts >= ?
-             GROUP BY time_bucket, cough_type
-             ORDER BY time_bucket ASC
-         """
-@@ -297,10 +338,10 @@ class Dao:
-     def get_daily_counts(self, client_id: str) -> list[dict[str, Any]]:
-         start_time = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-         sql = """
--            SELECT strftime('%Y-%m-%d', received_ts) AS time_bucket,
-+            SELECT strftime('%Y-%m-%d', event_ts) AS time_bucket,
-                    cough_type, COUNT(*) AS count
-             FROM cough_events
--            WHERE client_id = ? AND received_ts >= ?
-+            WHERE client_id = ? AND event_ts >= ?
-             GROUP BY time_bucket, cough_type
-             ORDER BY time_bucket ASC
-         """
 diff --git a/gateway/app/event_processor.py b/gateway/app/event_processor.py
-index 4db77db..c629626 100644
+index 70ab9c8..ab53db8 100644
 --- a/gateway/app/event_processor.py
 +++ b/gateway/app/event_processor.py
-@@ -101,6 +101,9 @@ class EventProcessor:
+@@ -143,6 +143,9 @@ class EventProcessor:
              raw.get("event_ts") or parsed.get("event_timestamp_iso"),
              fallback=received_ts,
          )
@@ -161,18 +141,17 @@ index 4db77db..c629626 100644
          session_id = str(raw.get("session_id") or "legacy")
          message_id = raw.get("message_id") or self._fallback_message_id(raw)
  
-@@ -123,7 +126,8 @@ class EventProcessor:
+@@ -165,7 +168,7 @@ class EventProcessor:
              "cough_type": raw.get("cough_type", parsed.get("cough_type_name", parsed.get("cough_type"))),
              "counter": _safe_int(raw.get("counter", parsed.get("event_counter"))),
              "node_event_timestamp": _safe_int(parsed.get("event_timestamp")),
 -            "timestamp_source": parsed.get("timestamp_source") or raw.get("timestamp_source") or "gateway_received",
-+            "timestamp_source": ("unknown_unsynchronized" if event_ts is None else
-+                                 parsed.get("timestamp_source") or raw.get("timestamp_source") or "gateway_received"),
-             "temperature_c": raw.get("temperature_c", parsed.get("temperature_c")),
-             "humidity_percent": raw.get("humidity_percent", parsed.get("humidity_percent")),
-             "temperature_x100": _safe_int(raw.get("temperature_x100", parsed.get("temperature_x100"))),
++            "timestamp_source": ("unknown_unsynchronized" if event_ts is None else parsed.get("timestamp_source") or raw.get("timestamp_source") or "gateway_received"),
+             "flags": _safe_int(raw.get("flags", parsed.get("flags"))),
+             "timestamp_valid": _safe_bool(
+                 raw.get("timestamp_valid", parsed.get("timestamp_valid"))
 diff --git a/gateway/app/schema.sql b/gateway/app/schema.sql
-index a270f55..3e8a51a 100644
+index 18c0e0b..4f034a2 100644
 --- a/gateway/app/schema.sql
 +++ b/gateway/app/schema.sql
 @@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS cough_events (
@@ -184,11 +163,32 @@ index a270f55..3e8a51a 100644
      received_ts          TEXT NOT NULL,
      event_counter        INTEGER,
      node_event_timestamp INTEGER,
+diff --git a/gateway/app/upload_worker.py b/gateway/app/upload_worker.py
+index c4c16a7..7a7f3c4 100644
+--- a/gateway/app/upload_worker.py
++++ b/gateway/app/upload_worker.py
+@@ -160,10 +160,14 @@ class UploadWorker:
+ 
+     def _upload(self, row: dict[str, Any]) -> None:
+         event_id = str(row["event_id"])
++        payload = row["payload"]
++        parsed = payload.get("parsed") or {}
++        occurrence_unknown = (payload.get("event") == "cough_event"
++                              and parsed.get("timestamp_valid") is False)
+         envelope = {
+             "event_id": event_id,
+-            "timestamp": row["event_ts"],
+-            "data": row["payload"],
++            "timestamp": None if occurrence_unknown else row["event_ts"],
++            "data": payload,
+         }
+         response = self.post(
+             self.upload_url,
 diff --git a/gateway/ble_host_modular/ble_central.py b/gateway/ble_host_modular/ble_central.py
-index de457aa..2641cd3 100644
+index 464bd6c..abdb92a 100644
 --- a/gateway/ble_host_modular/ble_central.py
 +++ b/gateway/ble_host_modular/ble_central.py
-@@ -31,6 +31,9 @@ from constants import (
+@@ -39,6 +39,9 @@ from constants import (
  )
  from models import ConnectionState, PendingNode
  from payload_parser import parse_cough_payload, parse_environment_payload
@@ -198,16 +198,16 @@ index de457aa..2641cd3 100644
  from utils import (
      bgapi_uuid_to_text,
      normalize_address,
-@@ -164,6 +167,8 @@ class BleCentral:
+@@ -270,6 +273,8 @@ class BleCentral:
              self.scan_retry_after = now + RECONNECT_DELAY_SECONDS
  
          for state in list(self.connections.values()):
 +            if state.phase == "running" and now >= state.next_time_sync:
-+                self._synchronize_time(state)
++                self._start_time_sync(state, "hourly")
              if not state.phase_deadline or now < state.phase_deadline:
                  continue
              if state.phase == "closing":
-@@ -372,6 +377,12 @@ class BleCentral:
+@@ -573,6 +578,10 @@ class BleCentral:
              state.environment_characteristic = event.characteristic
              state.environment_characteristic_uuid = uuid_text
              state.environment_characteristic_properties = properties
@@ -215,12 +215,10 @@ index de457aa..2641cd3 100644
 +            state.relay_source_characteristic = event.characteristic
 +        elif uuid_text.lower() == RELAY_STATUS_UUID and properties & 0x10:
 +            state.relay_status_characteristic = event.characteristic
-+        elif uuid_text.lower() == TIME_SYNC_UUID and properties & 0x0a == 0x0a:
-+            state.time_sync_characteristic = event.characteristic
- 
-     def on_gatt_procedure_completed(self, event: Any) -> None:
-         state = self._state_for_event(event)
-@@ -391,20 +402,75 @@ class BleCentral:
+         elif bytes(event.uuid) == self.target_time_uuid:
+             state.time_characteristic = event.characteristic
+             state.time_characteristic_uuid = uuid_text
+@@ -612,12 +621,49 @@ class BleCentral:
              self._finish_service_discovery(state)
          elif state.phase == "discover_characteristics":
              self._finish_characteristic_discovery(state)
@@ -233,80 +231,46 @@ index de457aa..2641cd3 100644
          elif state.phase == "enable_cough_notifications":
              self._enable_environment_notifications(state)
          elif state.phase == "enable_environment_notifications":
--            state.phase = "running"
--            state.phase_deadline = 0.0
--            LOG.info(
--                "[%s] Notifications enabled: cough=%s environment=%s",
--                state.address,
--                state.cough_characteristic,
--                state.environment_characteristic,
 +            if state.relay_status_characteristic is not None:
 +                state.phase = "enable_relay_status"
 +                self._set_phase_deadline(state)
 +                try:
 +                    self.lib.bt.gatt.set_characteristic_notification(
-+                        state.handle, state.relay_status_characteristic, GATT_NOTIFICATION
-+                    )
++                        state.handle, state.relay_status_characteristic, GATT_NOTIFICATION)
 +                except bgapi.bglib.CommandFailedError as exc:
 +                    LOG.error("Relay status subscription failed: 0x%04x", exc.errorcode)
 +                    self.disconnect_connection(state.handle)
-+            else:
-+                self._synchronize_time(state)
-+        elif state.phase == "enable_relay_status":
-+            self._synchronize_time(state)
-+        elif state.phase == "sync_time":
-+            state.phase = "verify_time"
-+            state.time_readback = None
-+            self._set_phase_deadline(state)
-+            try:
-+                self.lib.bt.gatt.read_characteristic_value(state.handle, state.time_sync_characteristic)
-+            except bgapi.bglib.CommandFailedError as exc:
-+                LOG.error("Time readback failed: 0x%04x", exc.errorcode)
-+                self.disconnect_connection(state.handle)
-+        elif state.phase == "verify_time":
-+            if state.time_readback is None or abs(state.time_readback - int(time.time())) > 5:
-+                LOG.error("[%s] UTC verification failed: peer=%s", state.address, state.time_readback)
-+                self.disconnect_connection(state.handle)
++                except (bgapi.bglib.CommandError, OSError, ConnectorException) as exc:
++                    self._raise_transport_lost("gatt.subscribe_relay_status", exc)
 +                return
-+            LOG.info("[%s] BLE peer UTC verified=%d (relay source ACK is separate)",
-+                     state.address, state.time_readback)
-+            state.next_time_sync = time.monotonic() + 3600
-+            self._finish_subscriptions(state)
-+
-+    def _synchronize_time(self, state: ConnectionState) -> None:
-+        epoch = int(time.time())
-+        if state.time_sync_characteristic is None or not 1577836800 <= epoch <= 4102444799:
-+            LOG.error("[%s] Time Sync missing or Pi clock unset; update firmware/set Pi UTC",
-+                      state.address)
-+            self.disconnect_connection(state.handle)
-+            return
-+        state.phase = "sync_time"
-+        self._set_phase_deadline(state)
-+        try:
-+            self.lib.bt.gatt.write_characteristic_value(
-+                state.handle, state.time_sync_characteristic, epoch.to_bytes(4, "little")
-             )
-+        except bgapi.bglib.CommandFailedError as exc:
-+            LOG.error("Time write failed: 0x%04x", exc.errorcode)
-+            self.disconnect_connection(state.handle)
-+
-+    def _finish_subscriptions(self, state: ConnectionState) -> None:
-+        state.phase = "running"
-+        state.phase_deadline = 0.0
-+        LOG.info("[%s] Subscriptions ready; source=%s", state.address, state.source_address or state.address)
-+        if state.source_address is None:
-             self._emit_status(state, "connected")
--            state.status_reported = True
--            self.start_scan()
-+        else:
-+            self._emit_status(state, "connected" if state.relay_upstream_ready else "disconnected")
-+        state.status_reported = True
-+        self.start_scan()
++            self._finish_notification_setup(state)
++        elif state.phase == "enable_relay_status":
+             self._finish_notification_setup(state)
++        elif state.phase == "sync_time_verify":
++            valid = state.time_readback is not None and abs(state.time_readback - int(time.time())) <= 5
++            if not valid:
++                LOG.error("[%s] UTC readback invalid: %s", state.address, state.time_readback)
++            self._finish_time_sync(state, succeeded=valid)
+         elif state.phase.startswith("sync_time"):
+-            self._finish_time_sync(state, succeeded=True)
++            if state.time_characteristic_properties & 0x02:
++                state.phase = "sync_time_verify"
++                state.time_readback = None
++                self._set_phase_deadline(state)
++                try:
++                    self.lib.bt.gatt.read_characteristic_value(state.handle, state.time_characteristic)
++                except bgapi.bglib.CommandFailedError as exc:
++                    LOG.warning("Clock readback failed: 0x%04x", exc.errorcode)
++                    self._finish_time_sync(state, succeeded=False)
++                except (bgapi.bglib.CommandError, OSError, ConnectorException) as exc:
++                    self._raise_transport_lost("gatt.read_time", exc)
++            else:
++                self._finish_time_sync(state, succeeded=True)
  
      def _finish_service_discovery(self, state: ConnectionState) -> None:
          if state.target_service is None:
-@@ -420,20 +486,47 @@ class BleCentral:
-             self.disconnect_connection(state.handle)
+@@ -635,20 +681,47 @@ class BleCentral:
+             self._raise_transport_lost("gatt.discover_characteristics", exc)
  
      def _finish_characteristic_discovery(self, state: ConnectionState) -> None:
 +        if state.relay_source_characteristic is None and any(
@@ -321,7 +285,7 @@ index de457aa..2641cd3 100644
              missing.append(self.args.cough_uuid)
          if state.environment_characteristic is None:
              missing.append(self.args.environment_uuid)
-+        if state.time_sync_characteristic is None:
++        if state.relay_source_characteristic is not None and state.time_characteristic is None:
 +            missing.append(TIME_SYNC_UUID)
          if missing:
              LOG.error("[%s] Missing required notify characteristic(s): %s", state.address, ", ".join(missing))
@@ -354,7 +318,50 @@ index de457aa..2641cd3 100644
              )
          except bgapi.bglib.CommandFailedError as exc:
              LOG.error("[%s] Cannot enable cough notifications: 0x%04x", state.address, exc.errorcode)
-@@ -452,7 +545,7 @@ class BleCentral:
+@@ -697,7 +770,7 @@ class BleCentral:
+             return False
+ 
+         sync_epoch = int(time.time()) if epoch is None else int(epoch)
+-        if not 0 < sync_epoch <= 0xFFFFFFFF:
++        if not 1577836800 <= sync_epoch <= 4102444799:
+             LOG.warning(
+                 "[%s] Unix epoch %r does not fit uint32; skipping time sync",
+                 state.address,
+@@ -743,12 +816,15 @@ class BleCentral:
+         if succeeded:
+             state.last_time_sync_epoch = epoch
+             state.last_time_sync_reason = reason
++            state.next_time_sync = time.monotonic() + 3600
+             LOG.info(
+                 "[%s] Time synchronized epoch=%s reason=%s",
+                 state.address,
+                 epoch,
+                 reason,
+             )
++        else:
++            state.next_time_sync = time.monotonic() + 60
+         state.pending_time_sync_epoch = None
+         state.pending_time_sync_reason = None
+         self._mark_running(state)
+@@ -757,7 +833,7 @@ class BleCentral:
+         state.phase = "running"
+         state.phase_deadline = 0.0
+         if not state.status_reported:
+-            self._emit_status(state, "connected")
++            self._emit_status(state, "connected" if not state.source_address or state.relay_upstream_ready else "disconnected")
+             state.status_reported = True
+             state.last_status_heartbeat_at = time.monotonic()
+         self.start_scan()
+@@ -782,7 +858,7 @@ class BleCentral:
+         message = self._next_envelope(state, "status", received_at)
+         message.update(
+             {
+-                "status": "connected",
++                "status": "disconnected" if state.source_address and not state.relay_upstream_ready else "connected",
+                 "heartbeat": True,
+                 "event_ts": received_at,
+             }
+@@ -806,7 +882,7 @@ class BleCentral:
  
      def _next_envelope(self, state: ConnectionState, event_name: str, received_at: str) -> dict[str, Any]:
          self.sequence += 1
@@ -363,7 +370,7 @@ index de457aa..2641cd3 100644
              "schema_version": 1,
              "message_id": str(uuid.uuid4()),
              "session_id": self.session_id,
-@@ -460,13 +553,17 @@ class BleCentral:
+@@ -814,13 +890,17 @@ class BleCentral:
              "event": event_name,
              "received_at": received_at,
              "device": {
@@ -385,11 +392,11 @@ index de457aa..2641cd3 100644
  
      def _emit_status(self, state: ConnectionState, status: str, reason: int | None = None) -> None:
          received_at = utc_now_iso()
-@@ -482,6 +579,44 @@ class BleCentral:
+@@ -836,6 +916,44 @@ class BleCentral:
              LOG.warning("Value event for unknown connection=%s", getattr(event, "connection", None))
              return
          opcode = event.att_opcode
-+        if event.characteristic == state.time_sync_characteristic and opcode == ATT_READ_RESPONSE:
++        if event.characteristic == state.time_characteristic and opcode == ATT_READ_RESPONSE:
 +            value = bytes(event.value)
 +            state.time_readback = int.from_bytes(value, "little") if len(value) == 4 else None
 +            return
@@ -430,7 +437,7 @@ index de457aa..2641cd3 100644
          if opcode == ATT_READ_RESPONSE:
              LOG.debug("[%s] Read response handle=%s: %s", state.address, event.characteristic, bytes(event.value).hex())
              return
-@@ -498,6 +633,9 @@ class BleCentral:
+@@ -852,6 +970,9 @@ class BleCentral:
                  event_ts, timestamp_source = resolve_event_timestamp(
                      parsed.get("event_timestamp"), received_at
                  )
@@ -440,7 +447,7 @@ index de457aa..2641cd3 100644
                  parsed["event_timestamp_iso"] = event_ts
                  parsed["timestamp_source"] = timestamp_source
              else:
-@@ -553,6 +691,9 @@ class BleCentral:
+@@ -907,6 +1028,9 @@ class BleCentral:
          )
          self._publish(message)
          self._confirm_indication_if_needed(state, opcode)
@@ -451,10 +458,10 @@ index de457aa..2641cd3 100644
      def _publish(self, message: dict[str, Any]) -> None:
          print(json.dumps(message, ensure_ascii=False), flush=True)
 diff --git a/gateway/ble_host_modular/models.py b/gateway/ble_host_modular/models.py
-index 9f64b31..bd05806 100644
+index d45c9e5..a64d3fc 100644
 --- a/gateway/ble_host_modular/models.py
 +++ b/gateway/ble_host_modular/models.py
-@@ -35,6 +35,16 @@ class ConnectionState:
+@@ -35,6 +35,15 @@ class ConnectionState:
      environment_characteristic_uuid: Optional[str] = None
      environment_characteristic_properties: int = 0
  
@@ -464,41 +471,28 @@ index 9f64b31..bd05806 100644
 +    source_address_type: Optional[int] = None
 +    relay_upstream_ready: Optional[bool] = None
 +    relay_status: Optional[dict] = None
-+    time_sync_characteristic: Optional[int] = None
 +    time_readback: Optional[int] = None
 +    next_time_sync: float = float("inf")
 +
-     phase: str = "discover_service"
-     phase_deadline: float = 0.0
-     status_reported: bool = False
+     time_characteristic: Optional[int] = None
+     time_characteristic_uuid: Optional[str] = None
+     time_characteristic_properties: int = 0
 diff --git a/gateway/ble_host_modular/payload_parser.py b/gateway/ble_host_modular/payload_parser.py
-index 08f572c..2f59cb4 100644
+index c4f8b1a..235626f 100644
 --- a/gateway/ble_host_modular/payload_parser.py
 +++ b/gateway/ble_host_modular/payload_parser.py
-@@ -26,6 +26,7 @@ def parse_cough_payload(payload: bytes) -> Optional[dict[str, int | str]]:
+@@ -32,7 +32,7 @@ def parse_cough_payload(payload: bytes) -> Optional[dict[str, int | str]]:
  
      return {
          "flags": flags,
-+        "timestamp_valid": bool(flags & 1) and 1577836800 <= event_timestamp <= 4102444799,
-         "cough_type": cough_type,
-         "cough_type_name": cough_type_name,
-         "event_timestamp": event_timestamp,
-diff --git a/tests/test_gateway_pipeline.py b/tests/test_gateway_pipeline.py
-index 6c8783e..c682702 100644
---- a/tests/test_gateway_pipeline.py
-+++ b/tests/test_gateway_pipeline.py
-@@ -353,7 +353,8 @@ class BleRoutingTest(unittest.TestCase):
-             [message["device"]["address"] for message in sent],
-         )
-         self.assertEqual([11, 12], [message["parsed"]["event_counter"] for message in sent])
--        self.assertTrue(all(message["event_ts"] for message in sent))
-+        self.assertTrue(all(message["event_ts"] is None for message in sent))
-+        self.assertTrue(all(message["received_at"] for message in sent))
- 
- 
- if __name__ == "__main__":
+-        "timestamp_valid": bool(flags & FLAG_TIMESTAMP_VALID),
++        "timestamp_valid": bool(flags & FLAG_TIMESTAMP_VALID) and 1577836800 <= event_timestamp <= 4102444799,
+         "stage2_valid": bool(flags & FLAG_STAGE2_VALID),
+         "prolonged": bool(flags & FLAG_PROLONGED),
+         "duration_s": (flags >> DURATION_SHIFT) & DURATION_MASK,
 diff --git a/gateway/ble_host_modular/relay_protocol.py b/gateway/ble_host_modular/relay_protocol.py
 new file mode 100644
+index 0000000..4897846
 --- /dev/null
 +++ b/gateway/ble_host_modular/relay_protocol.py
 @@ -0,0 +1,43 @@
@@ -545,11 +539,55 @@ new file mode 100644
 +        "dropped": lost,
 +        "invalid_packets": invalid,
 +    }
+diff --git a/gateway/dashboard/callbacks.py b/gateway/dashboard/callbacks.py
+index d49aad0..745c0cf 100644
+--- a/gateway/dashboard/callbacks.py
++++ b/gateway/dashboard/callbacks.py
+@@ -181,7 +181,7 @@ def register(app: dash.Dash) -> None:
+         rows = [
+             {
+                 "time": _fmt_event_ts(
+-                    event.get("event_ts") or event.get("received_ts"),
++                    event.get("event_ts"),
+                     include_date=not bool(selected_date),
+                 ),
+                 "type": str(event.get("cough_type") or "unknown").title(),
+diff --git a/tests/test_gateway_pipeline.py b/tests/test_gateway_pipeline.py
+index b7e50d2..de95881 100644
+--- a/tests/test_gateway_pipeline.py
++++ b/tests/test_gateway_pipeline.py
+@@ -1772,13 +1772,14 @@ class BleRoutingTest(unittest.TestCase):
+         )
+         central.disconnect_connection = lambda handle: None
+ 
++        central.connections = {state.handle: state}
+         checks = (
+             (lambda: central._finish_service_discovery(state), "discover_characteristics"),
+             (
+                 lambda: central._finish_characteristic_discovery(state),
+                 "set_characteristic_notification",
+             ),
+-            (lambda: central._start_time_sync(state, "test", epoch=1), "write_characteristic_value"),
++            (lambda: central._start_time_sync(state, "test", epoch=1794452400), "write_characteristic_value"),
+             (
+                 lambda: central._confirm_indication_if_needed(state, 0x1D),
+                 "send_characteristic_confirmation",
+@@ -2269,7 +2270,8 @@ class BleRoutingTest(unittest.TestCase):
+             [message["device"]["address"] for message in sent],
+         )
+         self.assertEqual([11, 12], [message["parsed"]["event_counter"] for message in sent])
+-        self.assertTrue(all(message["event_ts"] for message in sent))
++        self.assertTrue(all(message["event_ts"] is None for message in sent))
++        self.assertTrue(all(message["received_at"] for message in sent))
+ 
+     def test_cough_payload_keeps_eight_byte_contract_and_uses_node_epoch(self) -> None:
+         from ble_central import BleCentral
 diff --git a/tests/test_relay.py b/tests/test_relay.py
 new file mode 100644
+index 0000000..046c3bb
 --- /dev/null
 +++ b/tests/test_relay.py
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,205 @@
 +"""Test bridge identity, link status and indication routing without BLE hardware."""
 +import contextlib
 +import io
@@ -564,7 +602,18 @@ new file mode 100644
 +ROOT = Path(__file__).resolve().parents[1]
 +sys.path.insert(0, str(ROOT / "gateway" / "ble_host_modular"))
 +fake = types.ModuleType("bgapi")
-+fake.bglib = SimpleNamespace(CommandFailedError=type("CommandFailedError", (Exception,), {}))
++class CommandError(Exception):
++    pass
++
++class CommandFailedError(CommandError):
++    def __init__(self, errorcode=1):
++        super().__init__(errorcode)
++        self.errorcode = errorcode
++
++fake.bglib = SimpleNamespace(CommandFailedError=CommandFailedError, CommandError=CommandError)
++fake_connector = types.ModuleType("bgapi.connector")
++fake_connector.ConnectorException = type("ConnectorException", (Exception,), {})
++sys.modules.setdefault("bgapi.connector", fake_connector)
 +sys.modules.setdefault("bgapi", fake)
 +from ble_central import BleCentral
 +from models import ConnectionState
@@ -577,7 +626,7 @@ new file mode 100644
 +            cough_characteristic=20, cough_characteristic_properties=0x32,
 +            environment_characteristic=21,
 +            relay_source_characteristic=25, relay_status_characteristic=24,
-+            time_sync_characteristic=29)
++            time_characteristic=29, time_characteristic_properties=0x0a)
 +        self.central = BleCentral.__new__(BleCentral)
 +        self.central.connections = {1: self.state}
 +        self.central.sequence = 0
@@ -645,7 +694,7 @@ new file mode 100644
 +        self.status(True)
 +        self.assertEqual([], self.messages)
 +        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
-+        self.assertEqual("sync_time", self.state.phase)
++        self.assertEqual("sync_time_connect", self.state.phase)
 +        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
 +        import time
 +        self.central.on_gatt_characteristic_value(SimpleNamespace(connection=1,
@@ -691,6 +740,22 @@ new file mode 100644
 +        with self.assertRaises(ValueError): parse_relay_status(bytes(20))
 +        with self.assertRaises(ValueError): parse_relay_status(bytes([1])*19)
 +
++    def test_relay_heartbeat_does_not_mark_disconnected_source_online(self):
++        self.identity()
++        self.state.relay_upstream_ready = False
++        self.central._publish_best_effort = self.messages.append
++        self.central._emit_status_heartbeat(self.state)
++        self.assertEqual("disconnected", self.messages[-1]["status"])
++
++    def test_hourly_refresh_writes_time_without_reconnecting(self):
++        self.state.phase = "running"
++        self.state.next_time_sync = 10
++        self.central.pending_node = None
++        with patch("ble_central.time.time",return_value=1794452700):
++            self.central._check_timeouts(11)
++        self.assertEqual("sync_time_hourly", self.state.phase)
++        self.assertEqual(("write",(1,29,struct.pack("<I",1794452700))),self.commands[-1])
++
 +    def test_offline_10am_cough_received_at_1005_keeps_10am(self):
 +        self.identity(); self.state.relay_upstream_ready = True
 +        with patch("ble_central.utc_now_iso",return_value="2026-11-12T03:05:00.000Z"):
@@ -710,29 +775,30 @@ new file mode 100644
 +
 +    def test_bad_pi_clock_never_sent(self):
 +        with patch("ble_central.time.time",return_value=1):
-+            self.central._synchronize_time(self.state)
-+        self.assertEqual([1],self.closes)
++            self.central._start_time_sync(self.state,"connect")
++        self.assertEqual([],self.closes)
 +        self.assertEqual([],self.commands)
 +
 +    def test_bad_readback_not_marked_ready(self):
-+        self.state.phase="verify_time"; self.state.time_readback=1
++        self.state.phase="sync_time_verify"; self.state.time_readback=1
 +        self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
-+        self.assertEqual([1],self.closes)
-+        self.assertEqual([],self.messages)
++        self.assertIsNone(self.state.last_time_sync_epoch)
++        self.assertEqual("running",self.state.phase)
 +
 +    def test_new_connection_writes_current_clock_after_subscriptions(self):
 +        self.state.phase="enable_relay_status"
 +        with patch("ble_central.time.time",return_value=1794452700):
 +            self.central.on_gatt_procedure_completed(SimpleNamespace(connection=1,result=0))
-+        self.assertEqual("sync_time",self.state.phase)
++        self.assertEqual("sync_time_connect",self.state.phase)
 +        self.assertEqual(("write",(1,29,struct.pack("<I",1794452700))),self.commands[-1])
 +
 +if __name__ == "__main__": unittest.main()
 diff --git a/tests/test_time_sync_storage.py b/tests/test_time_sync_storage.py
 new file mode 100644
+index 0000000..abaded4
 --- /dev/null
 +++ b/tests/test_time_sync_storage.py
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,126 @@
 +"""Occurrence-time history, unknown times, and migration of a real legacy DB."""
 +from pathlib import Path
 +import sqlite3
@@ -741,6 +807,7 @@ new file mode 100644
 +import unittest
 +from datetime import datetime, timezone
 +from unittest.mock import patch
++from types import SimpleNamespace
 +
 +ROOT = Path(__file__).resolve().parents[1]
 +sys.path.insert(0, str(ROOT / "gateway"))
@@ -778,9 +845,9 @@ new file mode 100644
 +        self.assertEqual("2026-11-12T03:00:00.000Z", row["event_ts"])
 +        self.assertEqual("2026-11-12T03:05:00.000Z", row["received_ts"])
 +        # Selecting 10:00 includes the delayed event; selecting 10:05 does not.
-+        self.assertEqual(1, len(self.dao.get_events(client_id="patient", start_time="2026-11-12T03:00:00.000Z",
++        self.assertEqual(1, len(self.dao.get_events_by_occurrence(client_id="patient", start_time="2026-11-12T03:00:00.000Z",
 +                                                  end_time="2026-11-12T03:00:01.000Z")))
-+        self.assertEqual([], self.dao.get_events(client_id="patient", start_time="2026-11-12T03:04:00.000Z",
++        self.assertEqual([], self.dao.get_events_by_occurrence(client_id="patient", start_time="2026-11-12T03:04:00.000Z",
 +                                                end_time="2026-11-12T03:06:00.000Z"))
 +
 +    def test_unknown_time_remains_null_after_database_restart(self):
@@ -793,7 +860,7 @@ new file mode 100644
 +        row = self.dao.get_recent_events()[0]
 +        self.assertIsNone(row["event_ts"])
 +        self.assertEqual("2026-11-12T03:05:00.000Z", row["received_ts"])
-+        self.assertEqual([], self.dao.get_events(client_id="patient", start_time="2026-11-12T00:00:00.000Z"))
++        self.assertEqual([], self.dao.get_events_by_occurrence(client_id="patient", start_time="2026-11-12T00:00:00.000Z"))
 +
 +    def test_legacy_not_null_schema_migrates_with_rows_indexes_and_sequence(self):
 +        self.dao.close()
@@ -836,6 +903,24 @@ new file mode 100644
 +            clock.now.return_value = datetime(2026,11,12,4,tzinfo=timezone.utc)
 +            buckets = self.dao.get_hourly_counts("patient")
 +        self.assertEqual([dict(time_bucket="2026-11-12 02:00:00",cough_type="dry",count=1)], buckets)
++
++    def test_durable_upload_does_not_replace_unknown_time_with_queue_time(self):
++        from app.telemetry_queue import TelemetryQueue
++        from app.upload_worker import UploadWorker
++        queue = TelemetryQueue(str(self.path))
++        queue.init_db()
++        processor = EventProcessor(self.dao,Fleet(self.dao),telemetry_queue=queue)
++        processor.process(self.message(False))
++        row=queue.pending()[0]
++        self.assertIsNone(row["payload"]["event_ts"])
++        sent=[]
++        def post(_url,envelope,_timeout,_headers):
++            sent.append(envelope)
++            return SimpleNamespace(status_code=200,json=lambda:dict(ack=True,event_id="time-1"))
++        worker=UploadWorker(queue,"http://test.invalid/telemetry",post=post)
++        worker._upload(row)
++        self.assertIsNone(sent[0]["timestamp"])
++        self.assertEqual("2026-11-12T03:05:00.000Z", sent[0]["data"]["received_at"])
 +
 +
 +if __name__ == "__main__":
