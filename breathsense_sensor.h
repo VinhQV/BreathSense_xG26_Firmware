@@ -19,6 +19,7 @@ typedef struct {
  * Khoi tao Si7021 task, event flag group va software timer.
  */
 void breathsense_sensor_init(void);
+void breathsense_sensor_set_paused(bool paused);
 
 /*
  * Tao mot yeu cau do ngay lap tuc ma khong can polling.

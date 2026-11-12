@@ -237,6 +237,7 @@ sl_status_t sl_mic_deinit(void)
   sl_power_manager_remove_em_requirement(SL_POWER_MANAGER_EM1);
 #endif
 
+  (void)sl_clock_manager_disable_bus_clock(MIC_I2S_USART_CLOCK(SL_MIC_I2S_PERIPHERAL_NO));
   initialized = false;
 
   return SL_STATUS_OK;

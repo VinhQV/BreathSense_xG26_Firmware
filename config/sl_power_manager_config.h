@@ -89,7 +89,7 @@
 // <i> Enabling debug connectivity results in an increased power consumption in EM2/EM3.
 // <i> Default: 1
 #ifndef SL_POWER_MANAGER_INIT_EMU_EM2_DEBUG_ENABLE
-#define SL_POWER_MANAGER_INIT_EMU_EM2_DEBUG_ENABLE 1
+#define SL_POWER_MANAGER_INIT_EMU_EM2_DEBUG_ENABLE 0
 #endif
 // </e>
 

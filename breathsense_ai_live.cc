@@ -136,7 +136,7 @@ static uint16_t inference_sequence = 0u;
 
 static volatile uint32_t total_chunks_written = 0u;
 static volatile bool stream_callback_error = false;
-static bool capture_paused = false;
+static bool capture_paused = true;
 static uint8_t capture_state = 0u;
 static uint32_t inferred_windows = 0u;
 static uint32_t quiet_windows = 0u;
@@ -820,6 +820,8 @@ static void live_ai_task(void *arg)
       return;
     }
 
+    if (is_capture_paused()) { continue; }
+
     int8_t output_int8[BREATHSENSE_MODEL_OUTPUT_COUNT];
     float probabilities[BREATHSENSE_MODEL_OUTPUT_COUNT];
 
@@ -835,6 +837,8 @@ static void live_ai_task(void *arg)
       std::printf("AI ERROR: Stage 1 inference\r\n");
       return;
     }
+
+    if (is_capture_paused()) { continue; }
 
     const uint8_t raw_top1 = find_top1(probabilities);
     count_window(true);

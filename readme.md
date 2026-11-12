@@ -3,7 +3,7 @@
 BreathSense is an embedded acoustic monitoring prototype for the Silicon Labs
 EFR32MG26 platform.
 
-The firmware continuously captures microphone audio and runs a two-stage
+While wear is confirmed, the firmware captures microphone audio and runs a two-stage
 TensorFlow Lite for Microcontrollers pipeline:
 
 1. Stage 1 detects `COUGH`, `SNEEZE`, `SPEECH`, or `OTHER`.
@@ -19,7 +19,7 @@ through Bluetooth Low Energy GATT notifications.
 
 ## Features
 
-- Continuous 16 kHz mono microphone capture
+- 16 kHz mono capture while worn; IMU wake-on-motion standby when removed
 - TensorFlow Lite Micro inference on EFR32MG26
 - Two-stage acoustic classification
 - Configurable confidence thresholds and temporal filtering
@@ -343,3 +343,7 @@ the audio gate and validate the model again.
 
 No license has been selected yet. Add a `LICENSE` file before distributing or
 accepting external contributions.
+
+## Long Range and off-body standby
+
+Coded S=8 advertising and connections, +10 dBm maximum, task-owned sensor/radio shutdown, and EM2 with IMU wake-on-motion are implemented. See [behavior, validation, limitations and range test](docs/long_range_sleep_vi.md).

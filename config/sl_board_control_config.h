@@ -55,7 +55,7 @@
 
 // <q SL_BOARD_ENABLE_SENSOR_MICROPHONE> Enable Microphone
 // <i> Default: 0
-#define SL_BOARD_ENABLE_SENSOR_MICROPHONE       1
+#define SL_BOARD_ENABLE_SENSOR_MICROPHONE       0
 
 // <q SL_BOARD_DISABLE_MEMORY_SPI> Disable SPI Flash
 // <i> Default: 1
