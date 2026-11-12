@@ -1,11 +1,11 @@
 {
-  "validated_at_utc": "2026-11-12T11:38:41.711497+00:00",
+  "validated_at_utc": "2026-11-12T11:40:36.244361+00:00",
   "hardware_flashed_or_tested": false,
   "arm_builds": {
     "node": "passed",
     "relay": "passed"
   },
-  "host_c_suites": 3,
+  "host_c_suites": 5,
   "pi_gateway_tests_on_clean_patched_base": 116,
   "direct_receiver_tests": 4,
   "base_commit": "081228e5da9071fcf3fa65c257f74ad446b9f17f",
@@ -21,5 +21,6 @@
     "Must synchronize once after reboot before known wall-clock event times",
     "RAM-only clocks and queues; 64 events per queue",
     "BLE/AI/oscillator timing accuracy not measured on hardware"
-  ]
+  ],
+  "standby_validation": "passed: wear policy, radio lifecycle, UTC required before TX, retained clock across BLE standby"
 }

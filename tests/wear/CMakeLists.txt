@@ -6,8 +6,8 @@ target_include_directories(wear_policy_test PRIVATE ../../src/core)
 add_test(NAME wear_policy COMMAND wear_policy_test)
 set(SILABS_SDK_PATH "" CACHE PATH "Simplicity SDK root")
 if(SILABS_SDK_PATH)
-  add_executable(node_radio_test test_radio.c)
-  target_include_directories(node_radio_test PRIVATE stubs ../.. ../../src/core ../../autogen ../../config
+  add_executable(node_radio_test test_radio.c ../../src/core/breathsense_time_sync.c)
+  target_include_directories(node_radio_test PRIVATE stubs ../stubs ../.. ../../src/core ../../autogen ../../config
     "${SILABS_SDK_PATH}/bluetooth_le_host/inc"
     "${SILABS_SDK_PATH}/bgapi_protocol/protocol/inc"
     "${SILABS_SDK_PATH}/platform_common/platform/common/inc")
